@@ -12,6 +12,7 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual("Europe/Moscow", str(settings.timezone))
         self.assertEqual("07:00:00", str(settings.notification_time))
         self.assertEqual("data/tendura.sqlite3", str(settings.state_db))
+        self.assertEqual("data/coros-oauth.json", str(settings.coros_oauth_file))
 
     def test_runtime_requires_all_credentials(self) -> None:
         with self.assertRaisesRegex(ConfigurationError, "TENDURA_TELEGRAM_TOKEN"):

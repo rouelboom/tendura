@@ -23,6 +23,7 @@ class Settings:
     timezone: ZoneInfo
     notification_time: time
     state_db: Path
+    coros_oauth_file: Path
 
     @classmethod
     def from_environ(cls, environ: dict[str, str] | None = None) -> "Settings":
@@ -36,6 +37,9 @@ class Settings:
             timezone=_timezone(values.get("TENDURA_TIMEZONE", "Europe/Moscow")),
             notification_time=_time(values.get("TENDURA_NOTIFICATION_TIME", "07:00")),
             state_db=Path(values.get("TENDURA_STATE_DB", "data/tendura.sqlite3")),
+            coros_oauth_file=Path(
+                values.get("TENDURA_COROS_OAUTH_FILE", "data/coros-oauth.json")
+            ),
         )
 
     def validate_runtime(self) -> None:

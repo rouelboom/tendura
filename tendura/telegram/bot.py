@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from telegram import Update
 from telegram.constants import ParseMode
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 from tendura.config import Settings
-from tendura.telegram.formatting import format_workouts
+from tendura.coros.client import CorosClient, CorosError
+from tendura.telegram.formatting import format_coros_activity, format_workouts
 from tendura.telegram.notifications import schedule_daily_notifications
 from tendura.training_endurance.client import TrainingEnduranceClient, TrainingEnduranceError
 
@@ -23,9 +24,13 @@ def build_application(settings: Settings) -> Application:
     application = Application.builder().token(settings.telegram_token or "").build()
     application.bot_data["settings"] = settings
     application.bot_data["training_client"] = client
+    application.bot_data["coros_client"] = CorosClient(settings.coros_oauth_file)
     application.add_handler(CommandHandler("today", _today))
     application.add_handler(CommandHandler("tomorrow", _tomorrow))
     application.add_handler(CommandHandler("week", _week))
+    application.add_handler(
+        MessageHandler(filters.Regex(r"^/comment-coros(?:@\w+)?\s*$"), _comment_coros)
+    )
     application.add_handler(CommandHandler("comment", _prepare_comment))
     application.add_handler(CommandHandler("confirm", _confirm_comment))
     application.add_handler(CommandHandler("cancel", _cancel_comment))
@@ -66,6 +71,25 @@ async def _send_period(
         await message.reply_text("Не удалось получить тренировки. Проверьте сессию Training Endurance.")
         return
     await message.reply_text(format_workouts(workouts), parse_mode=ParseMode.HTML)
+
+
+async def _comment_coros(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await _allowed(update, context):
+        return
+    message = update.effective_message
+    settings: Settings = context.application.bot_data["settings"]
+    client: CorosClient = context.application.bot_data["coros_client"]
+    try:
+        activity = await client.latest_activity(today=datetime.now(settings.timezone).date())
+    except CorosError:
+        await message.reply_text(
+            "Не удалось получить отчёт из COROS. Повторите позже или переподключите COROS."
+        )
+        return
+    if activity is None:
+        await message.reply_text("За последние 24 часа тренировок COROS не найдено.")
+        return
+    await message.reply_text(format_coros_activity(activity), parse_mode=ParseMode.HTML)
 
 
 async def _prepare_comment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

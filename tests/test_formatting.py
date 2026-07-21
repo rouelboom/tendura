@@ -3,11 +3,31 @@ from __future__ import annotations
 import unittest
 from datetime import date
 
+from tendura.coros.client import CorosActivity
 from tendura.core.models import Workout
-from tendura.telegram.formatting import format_workouts
+from tendura.telegram.formatting import format_coros_activity, format_workouts
 
 
 class FormattingTest(unittest.TestCase):
+    def test_formats_missing_coros_report(self) -> None:
+        activity = CorosActivity("coros-id", 100, date(2026, 7, 21), "Кросс")
+
+        self.assertIn("голосовой отчёт в COROS не найден", format_coros_activity(activity))
+
+    def test_formats_coros_report(self) -> None:
+        activity = CorosActivity(
+            "coros-id",
+            100,
+            date(2026, 7, 21),
+            "Кросс",
+            report="Легко < отлично",
+        )
+
+        text = format_coros_activity(activity)
+
+        self.assertIn("<b>Отчёт из COROS</b>", text)
+        self.assertIn("Легко &lt; отлично", text)
+
     def test_formats_empty_period(self) -> None:
         self.assertEqual("На этот период тренировок нет.", format_workouts([]))
 
