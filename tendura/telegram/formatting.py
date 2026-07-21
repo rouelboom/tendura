@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from html import escape
 
 from tendura.core.models import Workout
 
@@ -14,13 +15,13 @@ def format_workouts(workouts: Sequence[Workout]) -> str:
 
 
 def _format_workout(workout: Workout) -> str:
-    lines = [f"<b>{workout.date:%d.%m} — {workout.title}</b>"]
+    lines = [f"<b>{workout.date:%d.%m} — {escape(workout.title)}</b>"]
     if workout.workout_type:
-        lines.append(f"Тип: {_workout_type(workout.workout_type)}")
+        lines.append(f"Тип: {escape(_workout_type(workout.workout_type))}")
     if workout.calculation_method:
-        lines.append(f"Метод расчёта: {_calculation_method(workout.calculation_method)}")
+        lines.append(f"Метод расчёта: {escape(_calculation_method(workout.calculation_method))}")
     if workout.displayed_zones:
-        lines.append(f"Зоны: {_zones(workout.displayed_zones)}")
+        lines.append(f"Зоны: {escape(_zones(workout.displayed_zones))}")
     if workout.duration_seconds is not None:
         hours, remainder = divmod(workout.duration_seconds, 3600)
         minutes = remainder // 60
@@ -29,7 +30,7 @@ def _format_workout(workout: Workout) -> str:
         lines.append(f"Дистанция: {workout.distance_meters / 1000:g} км")
     comment = workout.pre_activity_comment or workout.description
     if comment:
-        lines.extend(("", "<b>Комментарий перед тренировкой</b>", comment))
+        lines.extend(("", "<b>Комментарий перед тренировкой</b>", escape(comment)))
     return "\n".join(lines)
 
 

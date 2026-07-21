@@ -21,3 +21,14 @@ class FormattingTest(unittest.TestCase):
         self.assertIn("Метод расчёта: По пульсу", text)
         self.assertIn("Зоны: 5", text)
         self.assertIn("Комментарий перед тренировкой", text)
+
+    def test_escapes_html_from_training_data(self) -> None:
+        text = format_workouts([
+            Workout(
+                "id", date(2026, 7, 21), "u", "Кросс < лёгкий", "RUNNING", None,
+                None, None, "Темп < 5:00 & без ускорений", None, None, None, 1,
+            ),
+        ])
+
+        self.assertIn("Кросс &lt; лёгкий", text)
+        self.assertIn("Темп &lt; 5:00 &amp; без ускорений", text)
