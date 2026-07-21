@@ -1,0 +1,15 @@
+[project]
+name = "tendura"
+version = "0.1.0"
+description = "Personal Training Endurance assistant"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "httpx>=0.27,<0.29",
+    "python-telegram-bot[job-queue]>=22.8,<23",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

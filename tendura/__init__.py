@@ -1,0 +1,1 @@
+"""Tendura application."""
