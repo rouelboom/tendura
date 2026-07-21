@@ -25,7 +25,11 @@ query TenduraCalendarItems($request: CalendarItemsRequest!) {
       data {
         __typename
         ... on Workout {
+          name
           workoutType
+          calculationMethod
+          displayedZones
+          preActivityComment
           postActivityComment
           workoutDetails {
             durationInSeconds
@@ -132,14 +136,17 @@ def _workout_from_record(record: Any, *, user_id: str) -> Workout | None:
         raise TrainingEnduranceError("Тренировка не содержит id или дату")
     details = data.get("workoutDetails")
     details = details if isinstance(details, Mapping) else {}
-    title = _text(data, "workoutName", "name", "title") or "Тренировка"
+    title = _text(data, "name", "workoutName", "title") or "Тренировка"
     return Workout(
         id=record_id,
         date=date.fromisoformat(raw_date[:10]),
         user_id=_text(record, "userID") or user_id,
         title=title,
         workout_type=_text(data, "workoutType"),
+        calculation_method=_text(data, "calculationMethod"),
+        displayed_zones=_text(data, "displayedZones"),
         description=_text(data, "description"),
+        pre_activity_comment=_text(data, "preActivityComment"),
         duration_seconds=_integer(details, "durationInSeconds"),
         distance_meters=_integer(details, "distanceInMeters"),
         post_activity_comment=_text(data, "postActivityComment"),
