@@ -4,14 +4,23 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
 from telegram.constants import ParseMode
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
 
 from tendura.config import Settings
+from tendura.core.models import Workout
 from tendura.telegram.formatting import format_workouts
 from tendura.telegram.notifications import schedule_daily_notifications
 from tendura.training_endurance.client import TrainingEnduranceClient, TrainingEnduranceError
+from tendura.transcription import OpenAITranscriber, TranscriptionError
 
 
 def build_application(settings: Settings) -> Application:
@@ -29,6 +38,8 @@ def build_application(settings: Settings) -> Application:
     application.add_handler(CommandHandler("comment", _prepare_comment))
     application.add_handler(CommandHandler("confirm", _confirm_comment))
     application.add_handler(CommandHandler("cancel", _cancel_comment))
+    application.add_handler(CallbackQueryHandler(_select_voice_workout, pattern=r"^voice-comment:\d+$"))
+    application.add_handler(MessageHandler(filters.VOICE, _prepare_voice_comment))
     schedule_daily_notifications(application)
     return application
 
@@ -77,22 +88,105 @@ async def _prepare_comment(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         return
     settings: Settings = context.application.bot_data["settings"]
     client: TrainingEnduranceClient = context.application.bot_data["training_client"]
-    workouts = await client.workouts(user_id=settings.training_endurance_user_id or "", dates=[date.today()])
+    try:
+        workouts = await client.workouts(user_id=settings.training_endurance_user_id or "", dates=[date.today()])
+    except TrainingEnduranceError:
+        await message.reply_text("Не удалось получить тренировку. Проверьте сессию Training Endurance.")
+        return
     if len(workouts) != 1:
         await message.reply_text("Для отчёта нужна ровно одна тренировка на сегодня.")
         return
-    workout = workouts[0]
-    comment = " ".join(context.args)
+    await _show_comment_preview(message, context, workouts[0], " ".join(context.args))
+
+
+async def _prepare_voice_comment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Голосовое становится отчётом только после расшифровки и /confirm."""
+    if not await _allowed(update, context):
+        return
+    message = update.effective_message
+    voice = message.voice if message is not None else None
+    if message is None or voice is None:
+        return
+    if voice.duration > 600:
+        await message.reply_text("Голосовое должно длиться не более 10 минут.")
+        return
+    settings: Settings = context.application.bot_data["settings"]
+    if not settings.openai_api_key:
+        await message.reply_text("Распознавание голосовых пока не настроено: нужен ключ API распознавания.")
+        return
+    client: TrainingEnduranceClient = context.application.bot_data["training_client"]
+    try:
+        workouts = await client.workouts(user_id=settings.training_endurance_user_id or "", dates=[date.today()])
+    except TrainingEnduranceError:
+        await message.reply_text("Не удалось получить тренировку. Проверьте сессию Training Endurance.")
+        return
+    if not workouts:
+        await message.reply_text("На сегодня нет тренировки, к которой можно добавить отчёт.")
+        return
+    await message.reply_text("Распознаю голосовое сообщение…")
+    try:
+        file = await context.bot.get_file(voice.file_id)
+        transcript = await OpenAITranscriber(settings.openai_api_key).transcribe(
+            bytes(await file.download_as_bytearray())
+        )
+    except (TranscriptionError, RuntimeError):
+        await message.reply_text("Не удалось распознать голосовое. Попробуйте ещё раз или используйте /comment.")
+        return
+    if len(transcript) < 2:
+        await message.reply_text("В голосовом не удалось распознать текст отчёта.")
+        return
+    if len(transcript) > 3500:
+        await message.reply_text("Расшифровка слишком длинная для отчёта. Отправьте её несколькими голосовыми.")
+        return
+    if len(workouts) == 1:
+        await _show_comment_preview(message, context, workouts[0], transcript)
+        return
+    context.user_data["pending_voice_comment"] = (workouts, transcript)
+    keyboard = InlineKeyboardMarkup(
+        [[InlineKeyboardButton(_workout_label(workout), callback_data=f"voice-comment:{index}")]
+         for index, workout in enumerate(workouts)]
+    )
+    await message.reply_text("Выберите тренировку для распознанного отчёта:", reply_markup=keyboard)
+
+
+async def _select_voice_workout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await _allowed(update, context):
+        return
+    query = update.callback_query
+    if query is None or query.message is None or query.data is None:
+        return
+    pending = context.user_data.pop("pending_voice_comment", None)
+    if pending is None:
+        await query.answer("Голосовой отчёт больше не ожидает выбора.", show_alert=True)
+        return
+    workouts, transcript = pending
+    index = int(query.data.removeprefix("voice-comment:"))
+    if index >= len(workouts):
+        await query.answer("Тренировка не найдена.", show_alert=True)
+        return
+    await query.answer()
+    await _show_comment_preview(query.message, context, workouts[index], transcript)
+
+
+async def _show_comment_preview(
+    message: Message, context: ContextTypes.DEFAULT_TYPE, workout: Workout, comment: str
+) -> None:
     context.user_data["pending_comment"] = (workout, comment)
     warning = "\nСуществующий отчёт будет перезаписан." if workout.post_activity_comment else ""
-    await message.reply_text(f"Отправить отчёт к тренировке «{workout.title}»?{warning}\n\n{comment}\n\n/confirm или /cancel")
+    await message.reply_text(
+        f"Отправить отчёт к тренировке «{workout.title}»?{warning}\n\n{comment}\n\n/confirm или /cancel"
+    )
+
+
+def _workout_label(workout: Workout) -> str:
+    return f"{workout.date:%d.%m} — {workout.title}"[:64]
 
 
 async def _confirm_comment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await _allowed(update, context):
         return
     message = update.effective_message
-    pending = context.user_data.pop("pending_comment", None)
+    pending = context.user_data.get("pending_comment")
     if pending is None:
         await message.reply_text("Нет подготовленного отчёта.")
         return
@@ -103,11 +197,13 @@ async def _confirm_comment(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     except TrainingEnduranceError:
         await message.reply_text("Не удалось сохранить отчёт. Проверьте сессию и повторите попытку.")
         return
+    context.user_data.pop("pending_comment", None)
     await message.reply_text("Отчёт спортсмена сохранён.")
 
 
 async def _cancel_comment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data.pop("pending_comment", None)
+    context.user_data.pop("pending_voice_comment", None)
     if update.effective_message:
         await update.effective_message.reply_text("Отправка отчёта отменена.")
 

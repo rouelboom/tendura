@@ -20,6 +20,7 @@ class Settings:
     training_endurance_session: str | None
     training_endurance_cookie: str | None
     training_endurance_user_id: str | None
+    openai_api_key: str | None
     timezone: ZoneInfo
     notification_time: time
     state_db: Path
@@ -33,6 +34,7 @@ class Settings:
             training_endurance_session=_optional(values, "TENDURA_TRAINING_ENDURANCE_SESSION"),
             training_endurance_cookie=_optional(values, "TENDURA_TRAINING_ENDURANCE_COOKIE"),
             training_endurance_user_id=_optional(values, "TENDURA_TRAINING_ENDURANCE_USER_ID"),
+            openai_api_key=_optional(values, "TENDURA_OPENAI_API_KEY"),
             timezone=_timezone(values.get("TENDURA_TIMEZONE", "Europe/Moscow")),
             notification_time=_time(values.get("TENDURA_NOTIFICATION_TIME", "07:00")),
             state_db=Path(values.get("TENDURA_STATE_DB", "data/tendura.sqlite3")),
