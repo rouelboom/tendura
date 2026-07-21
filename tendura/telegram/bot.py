@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-from telegram import Update
+from telegram import BotCommand, Update
 from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
@@ -15,27 +15,55 @@ from tendura.telegram.notifications import schedule_daily_notifications
 from tendura.training_endurance.client import TrainingEnduranceClient, TrainingEnduranceError
 
 
+BOT_COMMANDS = (
+    BotCommand("today", "Тренировки на сегодня"),
+    BotCommand("tomorrow", "Тренировки на завтра"),
+    BotCommand("week", "Тренировки на неделю"),
+    BotCommand("comment_coros", "Голосовой отчёт из COROS"),
+    BotCommand("comment", "Подготовить отчёт Training Endurance"),
+    BotCommand("confirm", "Подтвердить подготовленный отчёт"),
+    BotCommand("cancel", "Отменить подготовленный отчёт"),
+    BotCommand("t", "Коротко: сегодня"),
+    BotCommand("tm", "Коротко: завтра"),
+    BotCommand("w", "Коротко: неделя"),
+    BotCommand("cc", "Коротко: отчёт COROS"),
+    BotCommand("c", "Коротко: подготовить отчёт"),
+    BotCommand("ok", "Коротко: подтвердить"),
+    BotCommand("x", "Коротко: отменить"),
+)
+
+
 def build_application(settings: Settings) -> Application:
     settings.validate_runtime()
     client = TrainingEnduranceClient(
         settings.training_endurance_session,
         cookie=settings.training_endurance_cookie,
     )
-    application = Application.builder().token(settings.telegram_token or "").build()
+    application = (
+        Application.builder()
+        .token(settings.telegram_token or "")
+        .post_init(_set_commands)
+        .build()
+    )
     application.bot_data["settings"] = settings
     application.bot_data["training_client"] = client
     application.bot_data["coros_client"] = CorosClient(settings.coros_oauth_file)
-    application.add_handler(CommandHandler("today", _today))
-    application.add_handler(CommandHandler("tomorrow", _tomorrow))
-    application.add_handler(CommandHandler("week", _week))
+    application.add_handler(CommandHandler(("today", "t"), _today))
+    application.add_handler(CommandHandler(("tomorrow", "tm"), _tomorrow))
+    application.add_handler(CommandHandler(("week", "w"), _week))
+    application.add_handler(CommandHandler(("comment_coros", "cc"), _comment_coros))
     application.add_handler(
         MessageHandler(filters.Regex(r"^/comment-coros(?:@\w+)?\s*$"), _comment_coros)
     )
-    application.add_handler(CommandHandler("comment", _prepare_comment))
-    application.add_handler(CommandHandler("confirm", _confirm_comment))
-    application.add_handler(CommandHandler("cancel", _cancel_comment))
+    application.add_handler(CommandHandler(("comment", "c"), _prepare_comment))
+    application.add_handler(CommandHandler(("confirm", "ok"), _confirm_comment))
+    application.add_handler(CommandHandler(("cancel", "x"), _cancel_comment))
     schedule_daily_notifications(application)
     return application
+
+
+async def _set_commands(application: Application) -> None:
+    await application.bot.set_my_commands(BOT_COMMANDS)
 
 
 async def _today(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
