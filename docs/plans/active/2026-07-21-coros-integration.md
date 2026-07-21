@@ -5,7 +5,7 @@
 - Repo: /Users/pavel/Dev/pets/tendura
 - Branches: feature/coros-integration
 - Created: 2026-07-21 20:57 MSK
-- Updated: 2026-07-21 23:29 MSK
+- Updated: 2026-07-21 23:30 MSK
 - Owner: Codex
 
 ## Goal
@@ -89,6 +89,7 @@
 - 2026-07-21 23:03 MSK Добавлены алиасы `/t`, `/tm`, `/w`, `/cc`, `/c`, `/ok`, `/x`; `/comment-coros` сохранён, для меню добавлен валидный `/comment_coros`.
 - 2026-07-21 23:10 MSK Код и защищённый OAuth-файл развёрнуты на сервере `138.16.161.115`; `tendura.service` перезапущен, меню Telegram опубликовано.
 - 2026-07-21 23:29 MSK COROS-команды переведены на общий с `/comment` preview: отчёт с часов не записывается без `/confirm` и может быть изменён через `/edit`/`/e`.
+- 2026-07-21 23:30 MSK Обновление развёрнуто на production-сервере; меню Telegram расширено до 16 команд, сервис перезапущен без ошибок.
 
 ## Validation
 - `git push origin main`: успешно, `main` опубликована в `origin`.
@@ -113,6 +114,9 @@
 - Telegram `getMyCommands`: подтверждены 14 команд в ожидаемом порядке, включая `/comment_coros` и `/cc`.
 - `make check && make test`: успешно после добавления preview и редактирования, 19 тестов.
 - Сборка Telegram Application: подтверждены `/edit`/`/e` и обработчик следующего обычного текстового сообщения после всех командных обработчиков.
+- Сервер `/opt/tendura`: компиляция и 19 тестов успешно.
+- `tendura.service`: `active`, `NRestarts=0`, `ExecMainStatus=0` после обновления preview/edit.
+- Telegram `getMyCommands`: подтверждены 16 команд, включая `/edit` и `/e`.
 
 ## Touched Files
 - `docs/plans/active/2026-07-21-coros-integration.md`
@@ -130,7 +134,7 @@
 - `tests/test_formatting.py`
 
 ## Next Step
-Развернуть обновление и вручную проверить `/cc` → preview → `/edit` → новый текст → `/confirm` либо `/cancel`. Отдельно проверить реальную активность без `Workout Note`, часовой пояс и поведение после простоя более 24 часов.
+Вручную проверить `/cc` → preview → `/edit` → новый текст → `/confirm` либо `/cancel`. Отдельно проверить реальную активность без `Workout Note`, часовой пояс и поведение после простоя более 24 часов.
 
 ## Resume
 1. Прочитать этот файл целиком.
