@@ -59,7 +59,7 @@ class TrainingEnduranceClient:
         if self._client is not None:
             response = await self._post(self._client, payload)
         else:
-            async with httpx.AsyncClient(timeout=20) as client:
+            async with httpx.AsyncClient(timeout=20, trust_env=False) as client:
                 response = await self._post(client, payload)
         return workouts_from_response(response, user_id=user_id)
 
