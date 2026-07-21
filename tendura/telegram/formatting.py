@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Sequence
 from html import escape
 
-from tendura.coros.client import CorosActivity
 from tendura.core.models import Workout
 
 
@@ -13,20 +12,6 @@ def format_workouts(workouts: Sequence[Workout]) -> str:
     if not workouts:
         return "На этот период тренировок нет."
     return "\n\n".join(_format_workout(workout) for workout in workouts)
-
-
-def format_coros_activity(activity: CorosActivity) -> str:
-    lines = [f"<b>{activity.date:%d.%m} — {escape(activity.title)}</b>"]
-    if activity.duration_seconds is not None:
-        minutes = activity.duration_seconds // 60
-        lines.append(f"Длительность: {minutes} мин")
-    if activity.distance_meters is not None:
-        lines.append(f"Дистанция: {activity.distance_meters / 1000:g} км")
-    if activity.report:
-        lines.extend(("", "<b>Отчёт из COROS</b>", escape(activity.report)))
-    else:
-        lines.extend(("", "Для этой тренировки голосовой отчёт в COROS не найден."))
-    return "\n".join(lines)
 
 
 def _format_workout(workout: Workout) -> str:

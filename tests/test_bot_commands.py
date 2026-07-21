@@ -14,6 +14,7 @@ class BotCommandsTest(unittest.TestCase):
             commands[:5],
         )
         self.assertEqual(
-            {"t", "tm", "w", "cc", "c", "ok", "x"},
-            set(commands[7:]),
+            {"t", "tm", "w", "cc", "c", "ok", "x", "e"},
+            set(commands[8:]),
         )
+        self.assertEqual("edit", commands[7])
