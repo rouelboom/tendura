@@ -20,7 +20,7 @@ from tendura.core.models import Workout
 from tendura.telegram.formatting import format_workouts
 from tendura.telegram.notifications import schedule_daily_notifications
 from tendura.training_endurance.client import TrainingEnduranceClient, TrainingEnduranceError
-from tendura.transcription import OpenAITranscriber, TranscriptionError
+from tendura.transcription import TranscriptionError, VoskTranscriber
 
 
 def build_application(settings: Settings) -> Application:
@@ -32,6 +32,7 @@ def build_application(settings: Settings) -> Application:
     application = Application.builder().token(settings.telegram_token or "").build()
     application.bot_data["settings"] = settings
     application.bot_data["training_client"] = client
+    application.bot_data["transcriber"] = VoskTranscriber(settings.vosk_model_path)
     application.add_handler(CommandHandler("today", _today))
     application.add_handler(CommandHandler("tomorrow", _tomorrow))
     application.add_handler(CommandHandler("week", _week))
@@ -111,9 +112,6 @@ async def _prepare_voice_comment(update: Update, context: ContextTypes.DEFAULT_T
         await message.reply_text("Голосовое должно длиться не более 10 минут.")
         return
     settings: Settings = context.application.bot_data["settings"]
-    if not settings.openai_api_key:
-        await message.reply_text("Распознавание голосовых пока не настроено: нужен ключ API распознавания.")
-        return
     client: TrainingEnduranceClient = context.application.bot_data["training_client"]
     try:
         workouts = await client.workouts(user_id=settings.training_endurance_user_id or "", dates=[date.today()])
@@ -126,7 +124,8 @@ async def _prepare_voice_comment(update: Update, context: ContextTypes.DEFAULT_T
     await message.reply_text("Распознаю голосовое сообщение…")
     try:
         file = await context.bot.get_file(voice.file_id)
-        transcript = await OpenAITranscriber(settings.openai_api_key).transcribe(
+        transcriber: VoskTranscriber = context.application.bot_data["transcriber"]
+        transcript = await transcriber.transcribe(
             bytes(await file.download_as_bytearray())
         )
     except (TranscriptionError, RuntimeError):
