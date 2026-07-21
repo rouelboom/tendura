@@ -5,7 +5,7 @@
 - Repo: /Users/pavel/Dev/pets/tendura
 - Branches: mvp
 - Created: 2026-07-21 18:28 MSK
-- Updated: 2026-07-21 18:48 MSK
+- Updated: 2026-07-21 18:53 MSK
 - Owner: Codex
 - Source session: 019f8519-d91c-7fd1-afcd-c572225c98b3
 
@@ -87,11 +87,11 @@ Tendura Bot (Telegram long polling)
 - [x] Настроить минимальные проверки качества и тестовый запуск.
 
 ### 2. Read-only прототип Training Endurance
-- [ ] Зафиксировать фактические GraphQL-документы и минимальные наборы полей для `calendarOverview` и `calendarItems`.
-- [ ] Реализовать безопасную передачу существующей сессии без Google-пароля и без вывода токена в логи.
-- [ ] Получить тренировки на заданный диапазон дат и преобразовать их во внутренние модели.
-- [ ] Обработать пустой календарь, несколько тренировок, сетевые ошибки, изменение ответа API и истёкшую сессию.
-- [ ] Добавить контрактные тесты на обезличенных примерах ответов.
+- [x] Зафиксировать фактические GraphQL-документы и минимальные наборы полей для `calendarOverview` и `calendarItems`.
+- [x] Реализовать безопасную передачу существующей сессии без Google-пароля и без вывода токена в логи.
+- [x] Получить тренировки на заданный диапазон дат и преобразовать их во внутренние модели.
+- [x] Обработать пустой календарь, несколько тренировок, сетевые ошибки, изменение ответа API и истёкшую сессию.
+- [x] Добавить контрактные тесты на обезличенных примерах ответов.
 
 ### 3. Telegram-витрина
 - [ ] Реализовать long polling и проверку разрешённого Telegram `user_id`/`chat_id` до выполнения команд.
@@ -164,6 +164,7 @@ Tendura Bot (Telegram long polling)
 - 2026-07-21 18:39 MSK Пользователь согласовал зависимости и потребовал использовать только виртуальное окружение.
 - 2026-07-21 18:39 MSK Созданы `pyproject.toml`, `.python-version`, `.gitignore`, пакеты ядра и интеграций; `uv` сформировал `.venv` и `uv.lock`.
 - 2026-07-21 18:48 MSK Добавлены конфигурация окружения, безопасный `.env.example`, команды Make и тесты загрузки настроек.
+- 2026-07-21 18:53 MSK Зафиксирована read-only операция `calendarItems`, реализованы GraphQL-клиент и нормализация тренировок без использования реальной сессии.
 
 ## Validation
 - `python3 --version`: успешно, активен CPython 3.14.6 через `pyenv`.
@@ -175,6 +176,7 @@ Tendura Bot (Telegram long polling)
 - `.venv/bin/python -m compileall -q tendura`: успешно.
 - `make check`: успешно.
 - `make test`: успешно, 4 теста конфигурации.
+- `make test`: успешно, 6 тестов, включая обезличенные ответы Training Endurance.
 
 ## Touched Files
 - `.gitignore`
@@ -186,13 +188,16 @@ Tendura Bot (Telegram long polling)
 - `tests/test_config.py`
 - `tendura/__init__.py`
 - `tendura/config.py`
+- `tendura/core/models.py`
+- `tendura/training_endurance/client.py`
+- `tests/test_training_endurance.py`
 - `tendura/core/__init__.py`
 - `tendura/training_endurance/__init__.py`
 - `tendura/telegram/__init__.py`
 - `docs/plans/active/2026-07-21-tendura-mvp.md`
 
 ## Next Step
-Зафиксировать read-only GraphQL-документы Training Endurance, реализовать их клиент и обезличенные контрактные тесты без использования реальной сессии.
+Реализовать Telegram-витрину: ограничение доступа, команды `/today`, `/tomorrow`, `/week` и форматирование тренировок.
 
 ## Resume
 1. Прочитать этот файл целиком.
