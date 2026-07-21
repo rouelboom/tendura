@@ -5,7 +5,7 @@
 - Repo: /Users/pavel/Dev/pets/tendura
 - Branches: mvp
 - Created: 2026-07-21 18:28 MSK
-- Updated: 2026-07-21 19:23 MSK
+- Updated: 2026-07-21 19:41 MSK
 - Owner: Codex
 - Source session: 019f8519-d91c-7fd1-afcd-c572225c98b3
 
@@ -166,6 +166,8 @@ Tendura Bot (Telegram long polling)
 - 2026-07-21 18:48 MSK Добавлены конфигурация окружения, безопасный `.env.example`, команды Make и тесты загрузки настроек.
 - 2026-07-21 18:53 MSK Зафиксирована read-only операция `calendarItems`, реализованы GraphQL-клиент и нормализация тренировок без использования реальной сессии.
 - 2026-07-21 19:23 MSK Добавлены ежедневная задача Telegram JobQueue и SQLite-защита от повторной отправки после перезапуска.
+- 2026-07-21 19:39 MSK Расширен запрос `calendarItems`: Telegram теперь показывает название, тип, метод расчёта, зоны, длительность, дистанцию и комментарий перед тренировкой.
+- 2026-07-21 19:41 MSK Данные тренировок экранируются перед отправкой в Telegram; обновлённый бот развёрнут как отдельный активный systemd-сервис.
 
 ## Validation
 - `python3 --version`: успешно, активен CPython 3.14.6 через `pyenv`.
@@ -179,6 +181,7 @@ Tendura Bot (Telegram long polling)
 - `make test`: успешно, 4 теста конфигурации.
 - `make test`: успешно, 6 тестов, включая обезличенные ответы Training Endurance.
 - `make test`: успешно, 11 тестов, включая восстановление состояния уведомлений после перезапуска.
+- `make test`: успешно, 12 тестов, включая форматирование полных данных тренировки и экранирование HTML.
 
 ## Touched Files
 - `.gitignore`
@@ -194,6 +197,11 @@ Tendura Bot (Telegram long polling)
 - `tendura/core/notification_state.py`
 - `tendura/training_endurance/client.py`
 - `tendura/telegram/notifications.py`
+- `tendura/telegram/formatting.py`
+- `tendura/telegram/bot.py`
+- `tests/test_formatting.py`
+- `README.md`
+- `deploy/tendura.service`
 - `tests/test_notification_state.py`
 - `tests/test_training_endurance.py`
 - `tendura/core/__init__.py`
