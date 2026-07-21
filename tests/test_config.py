@@ -24,7 +24,6 @@ class SettingsTest(unittest.TestCase):
                 "TENDURA_ALLOWED_TELEGRAM_ID": "123",
                 "TENDURA_TRAINING_ENDURANCE_SESSION": "session",
                 "TENDURA_TRAINING_ENDURANCE_USER_ID": "user-id",
-                "TENDURA_VOSK_MODEL_PATH": "var/vosk-model",
                 "TENDURA_TIMEZONE": "UTC",
                 "TENDURA_NOTIFICATION_TIME": "09:30",
                 "TENDURA_STATE_DB": "var/state.sqlite3",
@@ -35,7 +34,6 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(123, settings.allowed_telegram_id)
         self.assertEqual("UTC", str(settings.timezone))
         self.assertEqual("09:30:00", str(settings.notification_time))
-        self.assertEqual("var/vosk-model", str(settings.vosk_model_path))
 
     def test_rejects_invalid_telegram_id(self) -> None:
         with self.assertRaisesRegex(ConfigurationError, "должен быть целым"):
