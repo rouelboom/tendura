@@ -18,6 +18,7 @@ class Settings:
     telegram_token: str | None
     allowed_telegram_id: int | None
     training_endurance_session: str | None
+    training_endurance_cookie: str | None
     training_endurance_user_id: str | None
     timezone: ZoneInfo
     notification_time: time
@@ -30,6 +31,7 @@ class Settings:
             telegram_token=_optional(values, "TENDURA_TELEGRAM_TOKEN"),
             allowed_telegram_id=_optional_int(values, "TENDURA_ALLOWED_TELEGRAM_ID"),
             training_endurance_session=_optional(values, "TENDURA_TRAINING_ENDURANCE_SESSION"),
+            training_endurance_cookie=_optional(values, "TENDURA_TRAINING_ENDURANCE_COOKIE"),
             training_endurance_user_id=_optional(values, "TENDURA_TRAINING_ENDURANCE_USER_ID"),
             timezone=_timezone(values.get("TENDURA_TIMEZONE", "Europe/Moscow")),
             notification_time=_time(values.get("TENDURA_NOTIFICATION_TIME", "07:00")),
@@ -42,13 +44,16 @@ class Settings:
             for name, value in (
                 ("TENDURA_TELEGRAM_TOKEN", self.telegram_token),
                 ("TENDURA_ALLOWED_TELEGRAM_ID", self.allowed_telegram_id),
-                ("TENDURA_TRAINING_ENDURANCE_SESSION", self.training_endurance_session),
                 ("TENDURA_TRAINING_ENDURANCE_USER_ID", self.training_endurance_user_id),
             )
             if value is None
         ]
         if missing:
             raise ConfigurationError("Не заданы переменные: " + ", ".join(missing))
+        if not self.training_endurance_session and not self.training_endurance_cookie:
+            raise ConfigurationError(
+                "Нужен TENDURA_TRAINING_ENDURANCE_SESSION или TENDURA_TRAINING_ENDURANCE_COOKIE"
+            )
 
 
 def _optional(values: dict[str, str] | os._Environ[str], name: str) -> str | None:

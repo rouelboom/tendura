@@ -38,3 +38,15 @@ class SettingsTest(unittest.TestCase):
     def test_rejects_invalid_telegram_id(self) -> None:
         with self.assertRaisesRegex(ConfigurationError, "должен быть целым"):
             Settings.from_environ({"TENDURA_ALLOWED_TELEGRAM_ID": "text"})
+
+    def test_accepts_cookie_instead_of_session_token(self) -> None:
+        settings = Settings.from_environ(
+            {
+                "TENDURA_TELEGRAM_TOKEN": "token",
+                "TENDURA_ALLOWED_TELEGRAM_ID": "123",
+                "TENDURA_TRAINING_ENDURANCE_COOKIE": "ory_kratos_session=value",
+                "TENDURA_TRAINING_ENDURANCE_USER_ID": "user-id",
+            }
+        )
+
+        settings.validate_runtime()

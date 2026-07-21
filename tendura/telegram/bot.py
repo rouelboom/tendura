@@ -15,7 +15,10 @@ from tendura.training_endurance.client import TrainingEnduranceClient, TrainingE
 
 def build_application(settings: Settings) -> Application:
     settings.validate_runtime()
-    client = TrainingEnduranceClient(settings.training_endurance_session or "")
+    client = TrainingEnduranceClient(
+        settings.training_endurance_session,
+        cookie=settings.training_endurance_cookie,
+    )
     application = Application.builder().token(settings.telegram_token or "").build()
     application.bot_data["settings"] = settings
     application.bot_data["training_client"] = client

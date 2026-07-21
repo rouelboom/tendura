@@ -44,8 +44,9 @@ class TrainingEnduranceError(RuntimeError):
 
 
 class TrainingEnduranceClient:
-    def __init__(self, session_token: str, *, client: httpx.AsyncClient | None = None) -> None:
+    def __init__(self, session_token: str | None = None, *, cookie: str | None = None, client: httpx.AsyncClient | None = None) -> None:
         self._session_token = session_token
+        self._cookie = cookie
         self._client = client
 
     async def workouts(self, *, user_id: str, dates: Sequence[date]) -> list[Workout]:
@@ -63,10 +64,15 @@ class TrainingEnduranceClient:
         return workouts_from_response(response, user_id=user_id)
 
     async def _post(self, client: httpx.AsyncClient, payload: Mapping[str, Any]) -> Mapping[str, Any]:
+        headers = {}
+        if self._session_token:
+            headers["x-session-token"] = self._session_token
+        if self._cookie:
+            headers["Cookie"] = self._cookie
         response = await client.post(
             GRAPHQL_URL,
             json=payload,
-            headers={"x-session-token": self._session_token},
+            headers=headers,
         )
         response.raise_for_status()
         body = response.json()
