@@ -26,6 +26,9 @@ def build_application(settings: Settings) -> Application:
     application.add_handler(CommandHandler("today", _today))
     application.add_handler(CommandHandler("tomorrow", _tomorrow))
     application.add_handler(CommandHandler("week", _week))
+    application.add_handler(CommandHandler("comment", _prepare_comment))
+    application.add_handler(CommandHandler("confirm", _confirm_comment))
+    application.add_handler(CommandHandler("cancel", _cancel_comment))
     schedule_daily_notifications(application)
     return application
 
@@ -63,3 +66,59 @@ async def _send_period(
         await message.reply_text("Не удалось получить тренировки. Проверьте сессию Training Endurance.")
         return
     await message.reply_text(format_workouts(workouts), parse_mode=ParseMode.HTML)
+
+
+async def _prepare_comment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await _allowed(update, context):
+        return
+    message = update.effective_message
+    if message is None or not context.args:
+        await message.reply_text("Используйте: /comment ваш текст отчёта")
+        return
+    settings: Settings = context.application.bot_data["settings"]
+    client: TrainingEnduranceClient = context.application.bot_data["training_client"]
+    workouts = await client.workouts(user_id=settings.training_endurance_user_id or "", dates=[date.today()])
+    if len(workouts) != 1:
+        await message.reply_text("Для отчёта нужна ровно одна тренировка на сегодня.")
+        return
+    workout = workouts[0]
+    comment = " ".join(context.args)
+    context.user_data["pending_comment"] = (workout, comment)
+    warning = "\nСуществующий отчёт будет перезаписан." if workout.post_activity_comment else ""
+    await message.reply_text(f"Отправить отчёт к тренировке «{workout.title}»?{warning}\n\n{comment}\n\n/confirm или /cancel")
+
+
+async def _confirm_comment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await _allowed(update, context):
+        return
+    message = update.effective_message
+    pending = context.user_data.pop("pending_comment", None)
+    if pending is None:
+        await message.reply_text("Нет подготовленного отчёта.")
+        return
+    workout, comment = pending
+    client: TrainingEnduranceClient = context.application.bot_data["training_client"]
+    try:
+        await client.update_comment(workout, comment)
+    except TrainingEnduranceError:
+        await message.reply_text("Не удалось сохранить отчёт. Проверьте сессию и повторите попытку.")
+        return
+    await message.reply_text("Отчёт спортсмена сохранён.")
+
+
+async def _cancel_comment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    context.user_data.pop("pending_comment", None)
+    if update.effective_message:
+        await update.effective_message.reply_text("Отправка отчёта отменена.")
+
+
+async def _allowed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    user = update.effective_user
+    message = update.effective_message
+    settings: Settings = context.application.bot_data["settings"]
+    if user is None or message is None:
+        return False
+    if user.id == settings.allowed_telegram_id:
+        return True
+    await message.reply_text("Доступ к Tendura не разрешён.")
+    return False

@@ -38,6 +38,12 @@ query TenduraCalendarItems($request: CalendarItemsRequest!) {
 }
 """
 
+UPDATE_COMMENT_MUTATION = """
+mutation TenduraUpdateWorkoutComment($id: UUID!, $activity: CalendarItemUpdateRequest!, $data: UpdateWorkoutRequest!) {
+  calendarItemUpdateWorkout(id: $id, calendarItem: $activity, activity: $data)
+}
+"""
+
 
 class TrainingEnduranceError(RuntimeError):
     """Training Endurance вернул ошибку или неожиданную структуру данных."""
@@ -62,6 +68,20 @@ class TrainingEnduranceClient:
             async with httpx.AsyncClient(timeout=20, trust_env=False) as client:
                 response = await self._post(client, payload)
         return workouts_from_response(response, user_id=user_id)
+
+    async def update_comment(self, workout: Workout, comment: str) -> None:
+        response = await self._request({"query": UPDATE_COMMENT_MUTATION, "variables": {"id": workout.id, "activity": {"date": workout.date.isoformat(), "userID": workout.user_id}, "data": {"postActivityComment": comment}}})
+        if not response.get("data", {}).get("calendarItemUpdateWorkout"):
+            raise TrainingEnduranceError("Training Endurance не подтвердил сохранение отчёта")
+        saved = await self.workouts(user_id=workout.user_id, dates=[workout.date])
+        if not any(item.id == workout.id and item.post_activity_comment == comment for item in saved):
+            raise TrainingEnduranceError("Не удалось подтвердить сохранение отчёта")
+
+    async def _request(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
+        if self._client is not None:
+            return await self._post(self._client, payload)
+        async with httpx.AsyncClient(timeout=20, trust_env=False) as client:
+            return await self._post(client, payload)
 
     async def _post(self, client: httpx.AsyncClient, payload: Mapping[str, Any]) -> Mapping[str, Any]:
         headers = {}
