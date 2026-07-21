@@ -5,7 +5,7 @@
 - Repo: /Users/pavel/Dev/pets/tendura
 - Branches: mvp
 - Created: 2026-07-21 18:28 MSK
-- Updated: 2026-07-21 18:53 MSK
+- Updated: 2026-07-21 19:23 MSK
 - Owner: Codex
 - Source session: 019f8519-d91c-7fd1-afcd-c572225c98b3
 
@@ -101,10 +101,10 @@ Tendura Bot (Telegram long polling)
 - [ ] Покрыть обработчики и форматирование модульными тестами.
 
 ### 4. Ежедневные уведомления
-- [ ] Добавить настраиваемое время отправки в часовом поясе `Europe/Moscow`.
-- [ ] Исключить повторную отправку одной ежедневной подборки после перезапуска процесса.
-- [ ] Переиспользовать сценарий `/today`, чтобы ручная и автоматическая выдача совпадали.
-- [ ] Проверить переход даты, отсутствие тренировок и восстановление после временной ошибки.
+- [x] Добавить настраиваемое время отправки в часовом поясе `Europe/Moscow`.
+- [x] Исключить повторную отправку одной ежедневной подборки после перезапуска процесса.
+- [x] Переиспользовать сценарий `/today`, чтобы ручная и автоматическая выдача совпадали.
+- [x] Проверить переход даты, отсутствие тренировок и восстановление после временной ошибки.
 
 ### 5. Отчёт спортсмена
 - [ ] Окончательно подтвердить GraphQL-контракт `calendarItemUpdateWorkout` на согласованной тестовой записи.
@@ -165,6 +165,7 @@ Tendura Bot (Telegram long polling)
 - 2026-07-21 18:39 MSK Созданы `pyproject.toml`, `.python-version`, `.gitignore`, пакеты ядра и интеграций; `uv` сформировал `.venv` и `uv.lock`.
 - 2026-07-21 18:48 MSK Добавлены конфигурация окружения, безопасный `.env.example`, команды Make и тесты загрузки настроек.
 - 2026-07-21 18:53 MSK Зафиксирована read-only операция `calendarItems`, реализованы GraphQL-клиент и нормализация тренировок без использования реальной сессии.
+- 2026-07-21 19:23 MSK Добавлены ежедневная задача Telegram JobQueue и SQLite-защита от повторной отправки после перезапуска.
 
 ## Validation
 - `python3 --version`: успешно, активен CPython 3.14.6 через `pyenv`.
@@ -177,6 +178,7 @@ Tendura Bot (Telegram long polling)
 - `make check`: успешно.
 - `make test`: успешно, 4 теста конфигурации.
 - `make test`: успешно, 6 тестов, включая обезличенные ответы Training Endurance.
+- `make test`: успешно, 11 тестов, включая восстановление состояния уведомлений после перезапуска.
 
 ## Touched Files
 - `.gitignore`
@@ -189,7 +191,10 @@ Tendura Bot (Telegram long polling)
 - `tendura/__init__.py`
 - `tendura/config.py`
 - `tendura/core/models.py`
+- `tendura/core/notification_state.py`
 - `tendura/training_endurance/client.py`
+- `tendura/telegram/notifications.py`
+- `tests/test_notification_state.py`
 - `tests/test_training_endurance.py`
 - `tendura/core/__init__.py`
 - `tendura/training_endurance/__init__.py`
@@ -197,7 +202,7 @@ Tendura Bot (Telegram long polling)
 - `docs/plans/active/2026-07-21-tendura-mvp.md`
 
 ## Next Step
-Добавить ежедневные уведомления с хранением отправленных дат и тестами восстановления после перезапуска.
+Добавить понятные ответы Telegram-бота для пустого календаря, истёкшей сессии и временной недоступности Training Endurance, затем покрыть обработчики тестами.
 
 ## Resume
 1. Прочитать этот файл целиком.

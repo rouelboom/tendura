@@ -10,6 +10,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 
 from tendura.config import Settings
 from tendura.telegram.formatting import format_workouts
+from tendura.telegram.notifications import schedule_daily_notifications
 from tendura.training_endurance.client import TrainingEnduranceClient, TrainingEnduranceError
 
 
@@ -25,6 +26,7 @@ def build_application(settings: Settings) -> Application:
     application.add_handler(CommandHandler("today", _today))
     application.add_handler(CommandHandler("tomorrow", _tomorrow))
     application.add_handler(CommandHandler("week", _week))
+    schedule_daily_notifications(application)
     return application
 
 
