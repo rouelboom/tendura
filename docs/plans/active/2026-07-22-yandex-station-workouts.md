@@ -5,7 +5,7 @@
 - Repo: /Users/pavel/Dev/pets/tendura
 - Branches: feature/yandex-station-workouts
 - Created: 2026-07-22 09:18 MSK
-- Updated: 2026-07-22 17:24 MSK
+- Updated: 2026-07-22 17:32 MSK
 - Owner: Codex
 - Icon: link
 
@@ -147,7 +147,7 @@ GetWorkouts result ─> Telegram presenter
 - [x] Покрыть диапазоны тестами для понедельника, середины недели, воскресенья и перехода месяца/года.
 - [x] Покрыть Alice-adapter обезличенными webhook-фикстурами для всех трёх интентов, неизвестной команды и запрещённого пользователя.
 - [x] Добавить регрессионные тесты Telegram-команд, включая прежний скользящий семидневный `/week`.
-- [ ] Замерить живое время ответа Training Endurance и полного webhook; p95 должен оставлять безопасный запас до лимита 4,5 секунды.
+- [x] Замерить живое время ответа Training Endurance и полного webhook; p95 должен оставлять безопасный запас до лимита 4,5 секунды.
 - [x] По результатам latency-gate не добавлять TTL-кэш: живой запрос стабилен и оставляет достаточный запас до лимита 4,5 секунды.
 - [x] Выполнить `make check`, `make test` и `git diff --check`.
 
@@ -223,6 +223,8 @@ GetWorkouts result ─> Telegram presenter
 - 2026-07-22 17:18 MSK Авторизация Yandex Cloud CLI выполнена, но создание функции отклонено до создания ресурса; активных функций нет. Из-за отсутствия привязанного платёжного аккаунта и прямого запрета списаний облачное размещение отменено.
 - 2026-07-22 17:20 MSK Добавлен независимый stdlib HTTP entrypoint Алисы с `/alice`, `/healthz`, ограничением тела 64 КБ и отключённым access-log; подготовлены systemd/nginx-конфигурации для существующего сервера без новых Python-зависимостей.
 - 2026-07-22 17:24 MSK После явного подтверждения пользователя на production-сервер из официального Ubuntu-репозитория установлены `certbot` 4.0.0 и nginx-плагин; `certbot.timer` включён и активен. Установка бесплатна и не связана с Yandex Cloud billing.
+- 2026-07-22 17:32 MSK В `/opt/tendura-alice` развёрнут изолированный Alice-процесс, nginx публикует только `/alice` и `/healthz`, HTTP перенаправляется на HTTPS. Сертификат Let's Encrypt выпущен для `138-16-161-115.sslip.io`, пробное продление успешно.
+- 2026-07-22 17:32 MSK Двадцать сквозных запросов через публичный HTTPS webhook с live Training Endurance успешны: p50 454,7 мс, p95 573,4 мс, максимум 845,4 мс; ответы и тренировочные данные не выводились.
 
 ## Validation
 - План сопоставлен с `tendura/telegram/bot.py`, `tendura/core/models.py`, `tendura/training_endurance/client.py`, `tendura/config.py` и существующими тестами.
@@ -271,10 +273,13 @@ GetWorkouts result ─> Telegram presenter
 - `make test`: успешно после self-hosted entrypoint, 76 тестов.
 - `yc serverless function list`: функций нет; неуспешная команда создания вернула `PermissionDenied` и не создала ресурс.
 - Production: `certbot --version` — 4.0.0; `certbot.timer` имеет состояния `enabled` и `active`.
+- Production: `tendura-alice.service` и nginx активны; backend слушает только `127.0.0.1:8081`; публичный `/healthz` отвечает HTTP 200, HTTP перенаправляется на HTTPS.
+- `certbot renew --dry-run --no-random-sleep-on-renew`: успешно.
+- Публичный full-webhook latency-gate: 20 успешных ответов, p50 454,7 мс, p95 573,4 мс, максимум 845,4 мс.
 - Production-реализация и внешняя приёмка ещё не выполнялись.
 
 ## Remaining External Work
-- Получить бесплатный TLS-сертификат для существующего сервера, развернуть отдельный Alice-процесс и связать HTTPS webhook с приватным навыком.
+- Связать готовый HTTPS webhook с приватным навыком и заменить bootstrap allowlist на фактические skill ID и Yandex user ID.
 - Проверить интенты в консоли Диалогов и команды на реальной Станции, включая негарантированные короткие фразы без активационного имени.
 - Проверить фактические systemd/nginx-логи и завершить ручную приёмку; после этого план можно перенести в completed.
 
@@ -317,7 +322,7 @@ GetWorkouts result ─> Telegram presenter
 - `deploy/alice/nginx.conf`
 
 ## Next Step
-Развернуть self-hosted Alice-процесс и nginx-конфигурацию на существующем сервере, выпустить бесплатный TLS-сертификат и проверить публичный webhook.
+Создать приватный навык «Тренировочный помощник» в Яндекс Диалогах, указать `https://138-16-161-115.sslip.io/alice`, настроить три интента и получить фактические skill/user ID для allowlist.
 
 ## Resume
 1. Прочитать этот файл и план-исследование целиком.
