@@ -5,7 +5,7 @@
 - Repo: /Users/pavel/Dev/pets/tendura
 - Branches: feature/yandex-station-workouts
 - Created: 2026-07-22 09:18 MSK
-- Updated: 2026-07-22 12:16 MSK
+- Updated: 2026-07-22 12:18 MSK
 - Owner: Codex
 - Icon: link
 
@@ -117,8 +117,8 @@ GetWorkouts result ─> Telegram presenter
 - [x] Создать или переключиться на `feature/yandex-station-workouts` от согласованной базы, не затрагивая незавершённые изменения других планов.
 - [x] Зафиксировать JSON-фикстуры запросов/ответов Яндекс Диалогов без персональных идентификаторов.
 - [ ] Определить имя приватного навыка и три интента; отдельно записать гарантированные фразы с активационным именем.
-- [ ] Выбрать способ HTTPS-размещения Alice-adapter: существующий сервер за reverse proxy или Yandex Cloud Function; до внешних изменений получить согласование.
-- [ ] Если выбранный способ требует новой production-зависимости, отдельно согласовать её до добавления.
+- [x] Выбрать способ HTTPS-размещения Alice-adapter: существующий сервер за reverse proxy или Yandex Cloud Function; до внешних изменений получить согласование.
+- [x] Если выбранный способ требует новой production-зависимости, отдельно согласовать её до добавления.
 
 ### 2. Общее application-ядро
 - [x] Добавить порт чтения тренировок и `GetWorkouts`, принимающий явный непустой диапазон дат.
@@ -193,6 +193,7 @@ GetWorkouts result ─> Telegram presenter
 - Не использовать API умного дома как фиктивное устройство для обхода активационного имени.
 - Приватный навык и allowlist владельца достаточны для первой read-only приёмки; публичная авторизация остаётся отдельной задачей.
 - Способ HTTPS-размещения выбирается перед реализацией Alice entrypoint с отдельным согласованием внешних ресурсов и новых production-зависимостей.
+- Для HTTPS-размещения выбрана Yandex Cloud Function Python 3.14 с entrypoint `alice_function.handler`; функцию и навык создавать только после отдельного согласования внешних действий.
 
 ## Progress Log
 - 2026-07-22 09:18 MSK План создан на основе завершённого исследования; выбрано общее application-ядро с Telegram- и Alice-адаптерами.
@@ -209,6 +210,7 @@ GetWorkouts result ─> Telegram presenter
 - 2026-07-22 12:13 MSK Добавлен отдельный Alice-presenter с русскими длительностями/дистанциями, ответами для пустого и недельного результата и лимитом TTS 1024 символа.
 - 2026-07-22 12:15 MSK Реализован чистый асинхронный webhook handler: версия протокола, allowlist skill/user, инъецированный clock/timezone, три диапазона, помощь и безопасная ошибка провайдера.
 - 2026-07-22 12:16 MSK Добавлены независимая Alice-валидация настроек, безопасные переменные окружения и composition root без требования Telegram-конфигурации.
+- 2026-07-22 12:18 MSK Выбрана Yandex Cloud Function на поддерживаемом Python 3.14: async entrypoint `alice_function.handler` принимает прямой JSON, raw JSON и HTTP envelope; новых зависимостей не требуется.
 
 ## Validation
 - План сопоставлен с `tendura/telegram/bot.py`, `tendura/core/models.py`, `tendura/training_endurance/client.py`, `tendura/config.py` и существующими тестами.
@@ -231,6 +233,9 @@ GetWorkouts result ─> Telegram presenter
 - `.venv/bin/python -m unittest discover -s tests -p 'test_config.py' -v`: успешно, 7 тестов.
 - `.venv/bin/python -m unittest discover -s tests -p 'test_alice_application.py' -v`: успешно, 1 тест.
 - `make test`: успешно после composition root, 59 тестов.
+- `.venv/bin/python -m unittest discover -s tests -p 'test_alice_function.py' -v`: успешно, 4 теста.
+- `make test`: успешно после Cloud Function entrypoint, 63 теста.
+- Официальная документация Yandex Cloud 2026-07-22: Python 3.14 поддерживается, async handler разрешён, entrypoint задаётся как `<file>.<function>`, JSON event может приходить словарём или через raw HTTP body.
 - `git diff --check`: успешно.
 - Production-реализация и внешняя приёмка ещё не выполнялись.
 
@@ -253,9 +258,11 @@ GetWorkouts result ─> Telegram presenter
 - `tendura/alice/application.py`
 - `tendura/config.py`
 - `tests/test_alice_application.py`
+- `alice_function.py`
+- `tests/test_alice_function.py`
 
 ## Next Step
-Сверить официальные runtime-контракты Yandex Cloud Functions и Яндекс Диалогов, выбрать минимальное HTTPS-размещение без новой production-зависимости и добавить только локальный entrypoint/тест выбранного контракта; облачный ресурс не создавать.
+Зафиксировать имя приватного навыка «Тренировочный помощник», три гарантированные фразы с активационным именем и грамматики интентов в `deploy/alice`, затем проверить локальное соответствие intent ID контрактным фикстурам.
 
 ## Resume
 1. Прочитать этот файл и план-исследование целиком.
