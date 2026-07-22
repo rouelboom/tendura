@@ -5,7 +5,7 @@
 - Repo: /Users/pavel/Dev/pets/tendura
 - Branches: feature/yandex-station-workouts
 - Created: 2026-07-22 09:18 MSK
-- Updated: 2026-07-22 12:20 MSK
+- Updated: 2026-07-22 12:22 MSK
 - Owner: Codex
 - Icon: link
 
@@ -212,6 +212,7 @@ GetWorkouts result ─> Telegram presenter
 - 2026-07-22 12:16 MSK Добавлены независимая Alice-валидация настроек, безопасные переменные окружения и composition root без требования Telegram-конфигурации.
 - 2026-07-22 12:18 MSK Выбрана Yandex Cloud Function на поддерживаемом Python 3.14: async entrypoint `alice_function.handler` принимает прямой JSON, raw JSON и HTTP envelope; новых зависимостей не требуется.
 - 2026-07-22 12:20 MSK Зафиксированы имя «Тренировочный помощник», runtime/entrypoint, три grammar-файла и гарантированные команды с активационным именем; manifest связан тестом с webhook-фикстурами.
+- 2026-07-22 12:22 MSK Live latency-gate остановлен внешним состоянием: локальная `.env` отсутствует, production Training Endurance вернул HTTP 200 с GraphQL-ошибкой при активном `tendura.service`; персональные данные и тексты ошибок не выводились.
 
 ## Validation
 - План сопоставлен с `tendura/telegram/bot.py`, `tendura/core/models.py`, `tendura/training_endurance/client.py`, `tendura/config.py` и существующими тестами.
@@ -239,6 +240,8 @@ GetWorkouts result ─> Telegram presenter
 - Официальная документация Yandex Cloud 2026-07-22: Python 3.14 поддерживается, async handler разрешён, entrypoint задаётся как `<file>.<function>`, JSON event может приходить словарём или через raw HTTP body.
 - `.venv/bin/python -m unittest discover -s tests -p 'test_alice_deploy_contract.py' -v`: успешно, 2 теста.
 - `make test`: успешно после deploy-контракта, 65 тестов.
+- Production latency diagnostic: `tendura.service` активен, транспортный HTTP-ответ Training Endurance равен 200, но GraphQL содержит `errors`; p50/p95 не измерены до восстановления сессии/контракта.
+- Решение по TTL-кэшу отложено: добавлять его без фактических p95 и успешного live-контракта нельзя.
 - `git diff --check`: успешно.
 - Production-реализация и внешняя приёмка ещё не выполнялись.
 
@@ -271,7 +274,7 @@ GetWorkouts result ─> Telegram presenter
 - `tests/test_alice_deploy_contract.py`
 
 ## Next Step
-Без вывода персональных данных замерить несколько живых read-only вызовов Training Endurance и локальный полный webhook на текущих секретах окружения; зафиксировать p50/p95 и решить по фактам, нужен ли TTL-кэш.
+Подготовить воспроизводимую упаковку Yandex Cloud Function без новой зависимости и обновить README инструкциями по локальному контрактному тесту, приватному навыку, переменным окружения и отзыву доступа.
 
 ## Resume
 1. Прочитать этот файл и план-исследование целиком.
