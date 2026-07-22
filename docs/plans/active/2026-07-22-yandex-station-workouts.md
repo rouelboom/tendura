@@ -5,7 +5,7 @@
 - Repo: /Users/pavel/Dev/pets/tendura
 - Branches: feature/yandex-station-workouts
 - Created: 2026-07-22 09:18 MSK
-- Updated: 2026-07-22 17:11 MSK
+- Updated: 2026-07-22 17:20 MSK
 - Owner: Codex
 - Icon: link
 
@@ -42,7 +42,7 @@
 - Конфигурация и composition root сейчас ориентированы на единственный Telegram-процесс: `tendura/config.py`, `tendura/__main__.py`.
 - Яндекс Диалоги вызывают backend навыка через HTTPS и ожидают полный ответ не дольше 4,5 секунды.
 - Навык общего типа гарантированно запускается с активационным именем. Голые фразы вида «Алиса, какая сегодня тренировка» могут быть зарегистрированы как интенты внутри активного навыка, но их прямую маршрутизацию из обычного режима Алисы необходимо отдельно проверить на реальном устройстве.
-- Перед добавлением новой production-зависимости, созданием облачного ресурса, публикацией навыка или изменением сервера требуется отдельное подтверждение пользователя.
+- Пользователь согласовал выполнение оставшихся шагов, но запретил любые списания; платёжный аккаунт Yandex Cloud не привязывать.
 - Официальные источники: [запуск навыка](https://yandex.ru/dev/dialogs/alice/doc/ru/activation), [формат запроса](https://yandex.ru/dev/dialogs/alice/doc/ru/request), [формат ответа](https://yandex.ru/dev/dialogs/alice/doc/ru/response), [интенты и слоты](https://yandex.ru/dev/dialogs/alice/doc/ru/nlu), [приватный доступ](https://yandex.ru/dev/dialogs/alice/doc/ru/access).
 
 ## Scenario Matrix
@@ -118,7 +118,7 @@ GetWorkouts result ─> Telegram presenter
 - [x] Зафиксировать JSON-фикстуры запросов/ответов Яндекс Диалогов без персональных идентификаторов.
 - [x] Определить имя приватного навыка и три интента; отдельно записать гарантированные фразы с активационным именем.
 - [x] Выбрать способ HTTPS-размещения Alice-adapter: существующий сервер за reverse proxy или Yandex Cloud Function; до внешних изменений получить согласование.
-- [x] Если выбранный способ требует новой production-зависимости, отдельно согласовать её до добавления.
+- [ ] Отдельно согласовать средство выпуска и автоматического продления TLS-сертификата как новую production-зависимость.
 
 ### 2. Общее application-ядро
 - [x] Добавить порт чтения тренировок и `GetWorkouts`, принимающий явный непустой диапазон дат.
@@ -168,7 +168,7 @@ GetWorkouts result ─> Telegram presenter
 - `tendura/alice/intents.py`
 - `tendura/telegram/bot.py`
 - `tendura/config.py`
-- отдельный Alice entrypoint или cloud-function handler по выбранному варианту размещения
+- отдельный Alice entrypoint для самостоятельного размещения
 - `tests/test_workout_use_cases.py`
 - `tests/test_alice_handler.py`
 - `tests/test_alice_formatting.py`
@@ -192,8 +192,8 @@ GetWorkouts result ─> Telegram presenter
 - Для фраз с «ещё» использовать отдельный более специфичный интент.
 - Не использовать API умного дома как фиктивное устройство для обхода активационного имени.
 - Приватный навык и allowlist владельца достаточны для первой read-only приёмки; публичная авторизация остаётся отдельной задачей.
-- Способ HTTPS-размещения выбирается перед реализацией Alice entrypoint с отдельным согласованием внешних ресурсов и новых production-зависимостей.
-- Для HTTPS-размещения выбрана Yandex Cloud Function Python 3.14 с entrypoint `alice_function.handler`; функцию и навык создавать только после отдельного согласования внешних действий.
+- HTTPS-размещение выполняется на существующем сервере; средство выпуска и автопродления сертификата требует отдельного согласования как production-зависимость.
+- После запрета любых списаний Yandex Cloud Function исключена. HTTPS-размещение переносится на существующий сервер Tendura: отдельный stdlib HTTP-процесс, nginx, бесплатное имя `sslip.io` и сертификат Let's Encrypt.
 
 ## Progress Log
 - 2026-07-22 09:18 MSK План создан на основе завершённого исследования; выбрано общее application-ядро с Telegram- и Alice-адаптерами.
@@ -220,6 +220,8 @@ GetWorkouts result ─> Telegram presenter
 - 2026-07-22 12:41 MSK Весь доступный без внешних изменений объём завершён: 72 теста, compileall, diff-check и проверка целостности deploy-архива успешны. Открыты только live latency, облачное размещение, консоль Диалогов и приёмка на Станции.
 - 2026-07-22 15:05 MSK Обезличенная read-only диагностика production уточнила причину блокировки latency-gate: Training Endurance отвечает HTTP 200 примерно за 660 мс, но GraphQL возвращает `ErrAccessDenied`. Контракт запроса принят сервером, текущая cookie утратила авторизацию; сервер и секреты не изменялись.
 - 2026-07-22 17:11 MSK Исправлен ошибочный вывод предыдущей диагностики: shell `source` обрезал cookie по `;`, тогда как systemd-процесс использует полное рабочее значение. Двадцать запросов с credential работающего процесса успешны: p50 326,6 мс, p95 340,3 мс, максимум 647,3 мс; TTL-кэш не требуется.
+- 2026-07-22 17:18 MSK Авторизация Yandex Cloud CLI выполнена, но создание функции отклонено до создания ресурса; активных функций нет. Из-за отсутствия привязанного платёжного аккаунта и прямого запрета списаний облачное размещение отменено.
+- 2026-07-22 17:20 MSK Добавлен независимый stdlib HTTP entrypoint Алисы с `/alice`, `/healthz`, ограничением тела 64 КБ и отключённым access-log; подготовлены systemd/nginx-конфигурации для существующего сервера без новых Python-зависимостей.
 
 ## Validation
 - План сопоставлен с `tendura/telegram/bot.py`, `tendura/core/models.py`, `tendura/training_endurance/client.py`, `tendura/config.py` и существующими тестами.
@@ -264,12 +266,15 @@ GetWorkouts result ─> Telegram presenter
 - Финальные `make check`, `make test`, `git diff --check`: успешно, 72 теста.
 - `unzip -t dist/tendura-alice.zip`: успешно, ошибок сжатых данных нет.
 - `git diff --check`: успешно.
+- `.venv/bin/python -m unittest tests.test_alice_server -v`: успешно, 4 теста HTTP entrypoint.
+- `make test`: успешно после self-hosted entrypoint, 76 тестов.
+- `yc serverless function list`: функций нет; неуспешная команда создания вернула `PermissionDenied` и не создала ресурс.
 - Production-реализация и внешняя приёмка ещё не выполнялись.
 
 ## Remaining External Work
-- После отдельного согласования создать Cloud Function, передать секреты окружения вне Git и связать приватный навык.
+- Получить бесплатный TLS-сертификат для существующего сервера, развернуть отдельный Alice-процесс и связать HTTPS webhook с приватным навыком.
 - Проверить интенты в консоли Диалогов и команды на реальной Станции, включая негарантированные короткие фразы без активационного имени.
-- Проверить фактические облачные логи и завершить ручную приёмку; после этого план можно перенести в completed.
+- Проверить фактические systemd/nginx-логи и завершить ручную приёмку; после этого план можно перенести в completed.
 
 ## Touched Files
 - `docs/plans/active/2026-07-22-yandex-station-workouts.md`
@@ -304,9 +309,13 @@ GetWorkouts result ─> Telegram presenter
 - `tests/test_alice_package.py`
 - `README.md`
 - `tests/test_alice_end_to_end.py`
+- `tendura/alice/server.py`
+- `tests/test_alice_server.py`
+- `deploy/alice/tendura-alice.service`
+- `deploy/alice/nginx.conf`
 
 ## Next Step
-Создать Yandex Cloud Function из `dist/tendura-alice.zip`, передать секреты окружения вне Git, затем создать и связать приватный навык Алисы.
+После явного подтверждения новой production-зависимости установить средство выпуска/автопродления бесплатного TLS-сертификата, затем развернуть self-hosted webhook и создать приватный навык Алисы.
 
 ## Resume
 1. Прочитать этот файл и план-исследование целиком.

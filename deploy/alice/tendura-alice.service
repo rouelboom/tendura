@@ -1,0 +1,15 @@
+[Unit]
+Description=Tendura Alice webhook
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/tendura
+EnvironmentFile=/etc/tendura/tendura.env
+ExecStart=/opt/tendura/.venv/bin/python -m tendura.alice.server
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
