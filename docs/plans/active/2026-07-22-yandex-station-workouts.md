@@ -5,7 +5,7 @@
 - Repo: /Users/pavel/Dev/pets/tendura
 - Branches: feature/yandex-station-workouts
 - Created: 2026-07-22 09:18 MSK
-- Updated: 2026-07-22 12:13 MSK
+- Updated: 2026-07-22 12:15 MSK
 - Owner: Codex
 - Icon: link
 
@@ -123,7 +123,7 @@ GetWorkouts result ─> Telegram presenter
 ### 2. Общее application-ядро
 - [x] Добавить порт чтения тренировок и `GetWorkouts`, принимающий явный непустой диапазон дат.
 - [x] Вынести получение тренировок из `_send_period` в application-слой без Telegram-текстов и Telegram-типов.
-- [ ] Инъецировать clock/timezone для детерминированного вычисления сегодняшней даты.
+- [x] Инъецировать clock/timezone для детерминированного вычисления сегодняшней даты.
 - [x] Добавить функции диапазонов `today`, `calendar_week` и `remaining_calendar_week` с тестами границ недели.
 - [x] Перевести `/today`, `/tomorrow`, `/week` на use case и доказать отсутствие изменения Telegram-поведения.
 
@@ -131,7 +131,7 @@ GetWorkouts result ─> Telegram presenter
 - [x] Реализовать чистый parser/intent resolver для `workouts.today`, `workouts.calendar_week`, `workouts.remaining_calendar_week` и fallback-команды помощи.
 - [x] Реализовать Alice-presenter для пустого результата, одной и нескольких тренировок; обеспечить понятное произношение дат, времени, длительности и дистанции.
 - [x] Ограничить размер `tts`, а недельный ответ при необходимости сокращать детерминированно, не скрывая факт наличия дополнительных деталей.
-- [ ] Реализовать webhook handler формата Яндекс Диалогов и проверку владельца/skill ID.
+- [x] Реализовать webhook handler формата Яндекс Диалогов и проверку владельца/skill ID.
 - [ ] Добавить отдельный composition root/entrypoint Alice-adapter, переиспользующий application-ядро и `TrainingEnduranceClient`.
 - [ ] Добавить безопасную конфигурацию Alice skill ID, allowed Yandex user ID и параметров выбранного размещения; не выводить значения в логи.
 
@@ -145,7 +145,7 @@ GetWorkouts result ─> Telegram presenter
 ### 5. Тесты и производительность
 - [ ] Покрыть application use case тестами успешного результата, пустого календаря и ошибки Training Endurance.
 - [x] Покрыть диапазоны тестами для понедельника, середины недели, воскресенья и перехода месяца/года.
-- [ ] Покрыть Alice-adapter обезличенными webhook-фикстурами для всех трёх интентов, неизвестной команды и запрещённого пользователя.
+- [x] Покрыть Alice-adapter обезличенными webhook-фикстурами для всех трёх интентов, неизвестной команды и запрещённого пользователя.
 - [x] Добавить регрессионные тесты Telegram-команд, включая прежний скользящий семидневный `/week`.
 - [ ] Замерить живое время ответа Training Endurance и полного webhook; p95 должен оставлять безопасный запас до лимита 4,5 секунды.
 - [ ] Если живой запрос нестабилен, добавить минимальный TTL-кэш read-only результата и тесты его истечения; не кэшировать Telegram/Alice-разметку.
@@ -207,6 +207,7 @@ GetWorkouts result ─> Telegram presenter
 - 2026-07-22 12:10 MSK Диапазоны недели покрыты случаями понедельника, воскресенья и перехода года; все 10 application-тестов проходят.
 - 2026-07-22 12:12 MSK Добавлен чистый resolver интентов Алисы с приоритетом фразы «ещё», нормализованным fallback по тексту и отказом для неизвестной команды.
 - 2026-07-22 12:13 MSK Добавлен отдельный Alice-presenter с русскими длительностями/дистанциями, ответами для пустого и недельного результата и лимитом TTS 1024 символа.
+- 2026-07-22 12:15 MSK Реализован чистый асинхронный webhook handler: версия протокола, allowlist skill/user, инъецированный clock/timezone, три диапазона, помощь и безопасная ошибка провайдера.
 
 ## Validation
 - План сопоставлен с `tendura/telegram/bot.py`, `tendura/core/models.py`, `tendura/training_endurance/client.py`, `tendura/config.py` и существующими тестами.
@@ -224,6 +225,8 @@ GetWorkouts result ─> Telegram presenter
 - `make test`: успешно после intent resolver, 45 тестов.
 - `.venv/bin/python -m unittest discover -s tests -p 'test_alice_formatting.py' -v`: успешно, 4 теста.
 - `make test`: успешно после Alice-presenter, 49 тестов.
+- `.venv/bin/python -m unittest discover -s tests -p 'test_alice_handler.py' -v`: успешно, 7 тестов.
+- `make test`: успешно после webhook handler, 56 тестов.
 - `git diff --check`: успешно.
 - Production-реализация и внешняя приёмка ещё не выполнялись.
 
@@ -240,9 +243,11 @@ GetWorkouts result ─> Telegram presenter
 - `tests/test_alice_intents.py`
 - `tendura/alice/formatting.py`
 - `tests/test_alice_formatting.py`
+- `tendura/alice/handler.py`
+- `tests/test_alice_handler.py`
 
 ## Next Step
-Реализовать чистый асинхронный Alice webhook handler: проверить версию, skill ID и пользователя, вычислить даты в переданном часовом поясе, вызвать `GetWorkouts` и вернуть ответы для успеха, неизвестной команды, запрета и ошибки провайдера.
+Добавить безопасную Alice-конфигурацию и локальный composition root, который создаёт `TrainingEnduranceClient`, `GetWorkouts` и `AliceWebhookHandler`; не добавлять HTTP-сервер, облачный ресурс или production-зависимость.
 
 ## Resume
 1. Прочитать этот файл и план-исследование целиком.
