@@ -5,7 +5,7 @@
 - Repo: /Users/pavel/Dev/pets/tendura
 - Branches: feature/yandex-station-workouts
 - Created: 2026-07-22 09:18 MSK
-- Updated: 2026-07-22 12:27 MSK
+- Updated: 2026-07-22 12:31 MSK
 - Owner: Codex
 - Icon: link
 
@@ -214,6 +214,7 @@ GetWorkouts result ─> Telegram presenter
 - 2026-07-22 12:20 MSK Зафиксированы имя «Тренировочный помощник», runtime/entrypoint, три grammar-файла и гарантированные команды с активационным именем; manifest связан тестом с webhook-фикстурами.
 - 2026-07-22 12:22 MSK Live latency-gate остановлен внешним состоянием: локальная `.env` отсутствует, production Training Endurance вернул HTTP 200 с GraphQL-ошибкой при активном `tendura.service`; персональные данные и тексты ошибок не выводились.
 - 2026-07-22 12:27 MSK Добавлена воспроизводимая сборка минимального ZIP для Cloud Function, исключающая Telegram, COROS, данные, конфигурацию и bytecode; README дополнен локальной проверкой, настройкой приватного навыка и отзывом доступа.
+- 2026-07-22 12:31 MSK В изолированном окружении Python 3.14.6 успешно скомпилированы исходники и пройдены все 66 тестов; production-зависимости и lock-файл не изменялись.
 
 ## Validation
 - План сопоставлен с `tendura/telegram/bot.py`, `tendura/core/models.py`, `tendura/training_endurance/client.py`, `tendura/config.py` и существующими тестами.
@@ -245,6 +246,9 @@ GetWorkouts result ─> Telegram presenter
 - Решение по TTL-кэшу отложено: добавлять его без фактических p95 и успешного live-контракта нельзя.
 - `.venv/bin/python -m unittest discover -s tests -p 'test_alice_package.py' -v`: успешно, архив содержит runtime-файлы и не содержит Telegram, COROS, `.env`, данных и bytecode.
 - `deploy/alice/build.sh` и `unzip -l dist/tendura-alice.zip`: успешно, сформирован минимальный архив из 20 записей; `dist/` исключён из Git.
+- `UV_PROJECT_ENVIRONMENT=<временный каталог> uv sync --python 3.14 --no-dev`: успешно, использован Python 3.14.6 и зависимости текущего lock-файла.
+- `python3.14 -m compileall -q tendura tests alice_function.py`: успешно.
+- `python3.14 -m unittest discover -s tests -v`: успешно, 66 тестов; присутствуют прежние `ResourceWarning` SQLite без падений.
 - `git diff --check`: успешно.
 - Production-реализация и внешняя приёмка ещё не выполнялись.
 
@@ -282,7 +286,7 @@ GetWorkouts result ─> Telegram presenter
 - `README.md`
 
 ## Next Step
-Проверить весь проект и собранный Alice-adapter на целевом runtime Python 3.14 в изолированном окружении без изменения production-зависимостей.
+Добавить сквозные локальные acceptance-тесты от события Cloud Function до ответа Алисы для трёх команд, пустого результата, воскресенья и ошибки Training Endurance.
 
 ## Resume
 1. Прочитать этот файл и план-исследование целиком.
