@@ -5,7 +5,7 @@
 - Repo: /Users/pavel/Dev/pets/tendura
 - Branches: feature/yandex-station-workouts
 - Created: 2026-07-22 09:18 MSK
-- Updated: 2026-07-22 12:35 MSK
+- Updated: 2026-07-22 12:38 MSK
 - Owner: Codex
 - Icon: link
 
@@ -216,6 +216,7 @@ GetWorkouts result ─> Telegram presenter
 - 2026-07-22 12:27 MSK Добавлена воспроизводимая сборка минимального ZIP для Cloud Function, исключающая Telegram, COROS, данные, конфигурацию и bytecode; README дополнен локальной проверкой, настройкой приватного навыка и отзывом доступа.
 - 2026-07-22 12:31 MSK В изолированном окружении Python 3.14.6 успешно скомпилированы исходники и пройдены все 66 тестов; production-зависимости и lock-файл не изменялись.
 - 2026-07-22 12:35 MSK Добавлены шесть сквозных acceptance-тестов от HTTP envelope Cloud Function через application use case до ответа Алисы: три команды, пустой календарь, воскресенье и безопасная ошибка провайдера.
+- 2026-07-22 12:38 MSK Локальный security-аудит не обнаружил захардкоженных session/token-паттернов; Alice/application-код не логирует запросы и ответы, deploy-архив повторно проверен по полному списку файлов.
 
 ## Validation
 - План сопоставлен с `tendura/telegram/bot.py`, `tendura/core/models.py`, `tendura/training_endurance/client.py`, `tendura/config.py` и существующими тестами.
@@ -251,6 +252,9 @@ GetWorkouts result ─> Telegram presenter
 - `python3.14 -m compileall -q tendura tests alice_function.py`: успешно.
 - `python3.14 -m unittest discover -s tests -v`: успешно, 66 тестов; присутствуют прежние `ResourceWarning` SQLite без падений.
 - `.venv/bin/python -m unittest discover -s tests -p 'test_alice_end_to_end.py' -v`: успешно, 6 сквозных сценариев.
+- `git grep -Il` по паттернам Training Endurance session и Telegram bot token: совпадений в отслеживаемых файлах нет.
+- `rg` по вызовам `print`/`logging`/`logger` в Alice/application entrypoint и модулях: совпадений нет.
+- `unzip -Z1 dist/tendura-alice.zip`: подтверждён только ожидаемый runtime-состав; секретов, пользовательских данных и посторонних адаптеров нет.
 - `git diff --check`: успешно.
 - Production-реализация и внешняя приёмка ещё не выполнялись.
 
@@ -289,7 +293,7 @@ GetWorkouts result ─> Telegram presenter
 - `tests/test_alice_end_to_end.py`
 
 ## Next Step
-Провести локальный аудит секретов, логирования и содержимого deploy-архива; затем выполнить финальные проверки всего доступного без внешних изменений объёма.
+Выполнить финальные `make check`, `make test`, `git diff --check` и сверить остаток плана с действиями, требующими внешнего согласования или восстановления Training Endurance.
 
 ## Resume
 1. Прочитать этот файл и план-исследование целиком.
