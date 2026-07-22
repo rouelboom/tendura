@@ -35,6 +35,43 @@ class WorkoutPeriodTest(unittest.TestCase):
             dates,
         )
 
+    def test_calendar_week_on_monday_starts_today(self) -> None:
+        monday = date(2026, 7, 20)
+
+        dates = dates_for_period(WorkoutPeriod.CALENDAR_WEEK, today=monday)
+
+        self.assertEqual(
+            [date(2026, 7, day) for day in range(20, 27)],
+            dates,
+        )
+
+    def test_remaining_week_on_sunday_contains_only_today(self) -> None:
+        sunday = date(2026, 7, 26)
+
+        dates = dates_for_period(
+            WorkoutPeriod.REMAINING_CALENDAR_WEEK, today=sunday
+        )
+
+        self.assertEqual([sunday], dates)
+
+    def test_calendar_week_can_cross_year_boundary(self) -> None:
+        dates = dates_for_period(
+            WorkoutPeriod.CALENDAR_WEEK, today=date(2026, 12, 31)
+        )
+
+        self.assertEqual(
+            [
+                date(2026, 12, 28),
+                date(2026, 12, 29),
+                date(2026, 12, 30),
+                date(2026, 12, 31),
+                date(2027, 1, 1),
+                date(2027, 1, 2),
+                date(2027, 1, 3),
+            ],
+            dates,
+        )
+
 
 class GetWorkoutsTest(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
