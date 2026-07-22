@@ -5,7 +5,7 @@
 - Repo: /Users/pavel/Dev/pets/tendura
 - Branches: feature/yandex-station-workouts
 - Created: 2026-07-22 09:18 MSK
-- Updated: 2026-07-22 12:41 MSK
+- Updated: 2026-07-22 15:05 MSK
 - Owner: Codex
 - Icon: link
 
@@ -218,6 +218,7 @@ GetWorkouts result ─> Telegram presenter
 - 2026-07-22 12:35 MSK Добавлены шесть сквозных acceptance-тестов от HTTP envelope Cloud Function через application use case до ответа Алисы: три команды, пустой календарь, воскресенье и безопасная ошибка провайдера.
 - 2026-07-22 12:38 MSK Локальный security-аудит не обнаружил захардкоженных session/token-паттернов; Alice/application-код не логирует запросы и ответы, deploy-архив повторно проверен по полному списку файлов.
 - 2026-07-22 12:41 MSK Весь доступный без внешних изменений объём завершён: 72 теста, compileall, diff-check и проверка целостности deploy-архива успешны. Открыты только live latency, облачное размещение, консоль Диалогов и приёмка на Станции.
+- 2026-07-22 15:05 MSK Обезличенная read-only диагностика production уточнила причину блокировки latency-gate: Training Endurance отвечает HTTP 200 примерно за 660 мс, но GraphQL возвращает `ErrAccessDenied`. Контракт запроса принят сервером, текущая cookie утратила авторизацию; сервер и секреты не изменялись.
 
 ## Validation
 - План сопоставлен с `tendura/telegram/bot.py`, `tendura/core/models.py`, `tendura/training_endurance/client.py`, `tendura/config.py` и существующими тестами.
@@ -246,6 +247,7 @@ GetWorkouts result ─> Telegram presenter
 - `.venv/bin/python -m unittest discover -s tests -p 'test_alice_deploy_contract.py' -v`: успешно, 2 теста.
 - `make test`: успешно после deploy-контракта, 65 тестов.
 - Production latency diagnostic: `tendura.service` активен, транспортный HTTP-ответ Training Endurance равен 200, но GraphQL содержит `errors`; p50/p95 не измерены до восстановления сессии/контракта.
+- Повторная production-диагностика 2026-07-22: HTTP 200 за 659,7 мс, один GraphQL-код `ErrAccessDenied`; содержимое cookie, user ID и тренировок не выводилось.
 - Решение по TTL-кэшу отложено: добавлять его без фактических p95 и успешного live-контракта нельзя.
 - `.venv/bin/python -m unittest discover -s tests -p 'test_alice_package.py' -v`: успешно, архив содержит runtime-файлы и не содержит Telegram, COROS, `.env`, данных и bytecode.
 - `deploy/alice/build.sh` и `unzip -l dist/tendura-alice.zip`: успешно, сформирован минимальный архив из 20 записей; `dist/` исключён из Git.
@@ -262,7 +264,7 @@ GetWorkouts result ─> Telegram presenter
 - Production-реализация и внешняя приёмка ещё не выполнялись.
 
 ## Remaining External Work
-- Восстановить рабочую сессию или GraphQL-контракт Training Endurance и повторить p50/p95 latency-gate; только по результату решать вопрос TTL-кэша.
+- Получить новую авторизованную cookie Training Endurance, после отдельного согласования безопасно заменить production-секрет и повторить p50/p95 latency-gate; только по результату решать вопрос TTL-кэша.
 - После отдельного согласования создать Cloud Function, передать секреты окружения вне Git и связать приватный навык.
 - Проверить интенты в консоли Диалогов и команды на реальной Станции, включая негарантированные короткие фразы без активационного имени.
 - Проверить фактические облачные логи и завершить ручную приёмку; после этого план можно перенести в completed.
@@ -302,7 +304,7 @@ GetWorkouts result ─> Telegram presenter
 - `tests/test_alice_end_to_end.py`
 
 ## Next Step
-Восстановить рабочую сессию/GraphQL-контракт Training Endurance и повторить live p50/p95 latency-gate; затем после отдельного согласования развернуть приватный навык и провести приёмку на Станции.
+Получить от владельца новую авторизованную cookie Training Endurance и явное согласование её установки на production; после замены повторить live p50/p95 latency-gate.
 
 ## Resume
 1. Прочитать этот файл и план-исследование целиком.
