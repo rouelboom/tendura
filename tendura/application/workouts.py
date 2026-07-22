@@ -2,14 +2,36 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import date, timedelta
 from enum import Enum
+from typing import Protocol
+
+from tendura.core.models import Workout
 
 
 class WorkoutPeriod(str, Enum):
     TODAY = "today"
     CALENDAR_WEEK = "calendar_week"
     REMAINING_CALENDAR_WEEK = "remaining_calendar_week"
+
+
+class WorkoutReader(Protocol):
+    async def workouts(
+        self, *, user_id: str, dates: Sequence[date]
+    ) -> list[Workout]: ...
+
+
+@dataclass(frozen=True)
+class GetWorkouts:
+    reader: WorkoutReader
+    user_id: str
+
+    async def execute(self, dates: Sequence[date]) -> list[Workout]:
+        if not dates:
+            raise ValueError("Диапазон тренировок не может быть пустым")
+        return await self.reader.workouts(user_id=self.user_id, dates=dates)
 
 
 def dates_for_period(period: WorkoutPeriod, *, today: date) -> list[date]:

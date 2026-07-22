@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import unittest
 from datetime import date
+from unittest.mock import AsyncMock
 
-from tendura.application.workouts import WorkoutPeriod, dates_for_period
+from tendura.application.workouts import GetWorkouts, WorkoutPeriod, dates_for_period
+from tendura.core.models import Workout
+from tendura.training_endurance.client import TrainingEnduranceError
 
 
 class WorkoutPeriodTest(unittest.TestCase):
@@ -31,3 +34,54 @@ class WorkoutPeriodTest(unittest.TestCase):
             [date(2026, 7, day) for day in range(22, 27)],
             dates,
         )
+
+
+class GetWorkoutsTest(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        self.reader = AsyncMock()
+        self.use_case = GetWorkouts(self.reader, user_id="athlete-1")
+        self.dates = [date(2026, 7, 22)]
+
+    async def test_returns_workouts_from_reader(self) -> None:
+        workout = Workout(
+            id="workout-1",
+            date=self.dates[0],
+            user_id="athlete-1",
+            title="Восстановительный кросс",
+            workout_type="RUNNING",
+            calculation_method=None,
+            displayed_zones=None,
+            description=None,
+            pre_activity_comment=None,
+            duration_seconds=3600,
+            distance_meters=10000,
+            post_activity_comment=None,
+            sort=1,
+        )
+        self.reader.workouts.return_value = [workout]
+
+        result = await self.use_case.execute(self.dates)
+
+        self.assertEqual([workout], result)
+        self.reader.workouts.assert_awaited_once_with(
+            user_id="athlete-1", dates=self.dates
+        )
+
+    async def test_returns_empty_calendar(self) -> None:
+        self.reader.workouts.return_value = []
+
+        result = await self.use_case.execute(self.dates)
+
+        self.assertEqual([], result)
+
+    async def test_preserves_provider_error(self) -> None:
+        self.reader.workouts.side_effect = TrainingEnduranceError("недоступен")
+
+        with self.assertRaises(TrainingEnduranceError):
+            await self.use_case.execute(self.dates)
+
+    async def test_rejects_empty_date_range(self) -> None:
+        with self.assertRaises(ValueError):
+            await self.use_case.execute([])
+
+        self.reader.workouts.assert_not_awaited()
