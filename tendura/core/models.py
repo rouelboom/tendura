@@ -21,3 +21,5 @@ class Workout:
     distance_meters: int | None
     post_activity_comment: str | None
     sort: int | None
+    feeling_score: int | None = None
+    exertion_score: int | None = None

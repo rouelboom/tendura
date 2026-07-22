@@ -1,4 +1,4 @@
-"""Read-only клиент внутреннего GraphQL API Training Endurance."""
+"""Клиент внутреннего GraphQL API Training Endurance."""
 
 from __future__ import annotations
 
@@ -31,6 +31,8 @@ query TenduraCalendarItems($request: CalendarItemsRequest!) {
           displayedZones
           preActivityComment
           postActivityComment
+          feelingScore
+          exertionScore
           workoutDetails {
             durationInSeconds
             distanceInMeters
@@ -42,8 +44,8 @@ query TenduraCalendarItems($request: CalendarItemsRequest!) {
 }
 """
 
-UPDATE_COMMENT_MUTATION = """
-mutation TenduraUpdateWorkoutComment($id: UUID!, $activity: CalendarItemUpdateRequest!, $data: UpdateWorkoutRequest!) {
+UPDATE_WORKOUT_MUTATION = """
+mutation TenduraUpdateWorkout($id: UUID!, $activity: CalendarItemUpdateRequest!, $data: UpdateWorkoutRequest!) {
   calendarItemUpdateWorkout(id: $id, calendarItem: $activity, activity: $data)
 }
 """
@@ -74,12 +76,58 @@ class TrainingEnduranceClient:
         return workouts_from_response(response, user_id=user_id)
 
     async def update_comment(self, workout: Workout, comment: str) -> None:
-        response = await self._request({"query": UPDATE_COMMENT_MUTATION, "variables": {"id": workout.id, "activity": {"date": workout.date.isoformat(), "userID": workout.user_id}, "data": {"postActivityComment": comment}}})
+        response = await self._update_workout(
+            workout, {"postActivityComment": comment}
+        )
         if not response.get("data", {}).get("calendarItemUpdateWorkout"):
             raise TrainingEnduranceError("Training Endurance не подтвердил сохранение отчёта")
         saved = await self.workouts(user_id=workout.user_id, dates=[workout.date])
         if not any(item.id == workout.id and item.post_activity_comment == comment for item in saved):
             raise TrainingEnduranceError("Не удалось подтвердить сохранение отчёта")
+
+    async def update_feedback(
+        self, workout: Workout, *, feeling_score: int, exertion_score: int
+    ) -> None:
+        if feeling_score not in range(5, 96, 10):
+            raise ValueError("Некорректное значение самочувствия")
+        if exertion_score not in range(1, 11):
+            raise ValueError("Некорректное значение нагрузки")
+        response = await self._update_workout(
+            workout,
+            {
+                "feelingScore": feeling_score,
+                "exertionScore": exertion_score,
+            },
+        )
+        if not response.get("data", {}).get("calendarItemUpdateWorkout"):
+            raise TrainingEnduranceError(
+                "Training Endurance не подтвердил сохранение оценки"
+            )
+        saved = await self.workouts(user_id=workout.user_id, dates=[workout.date])
+        if not any(
+            item.id == workout.id
+            and item.feeling_score == feeling_score
+            and item.exertion_score == exertion_score
+            for item in saved
+        ):
+            raise TrainingEnduranceError("Не удалось подтвердить сохранение оценки")
+
+    async def _update_workout(
+        self, workout: Workout, data: Mapping[str, Any]
+    ) -> Mapping[str, Any]:
+        return await self._request(
+            {
+                "query": UPDATE_WORKOUT_MUTATION,
+                "variables": {
+                    "id": workout.id,
+                    "activity": {
+                        "date": workout.date.isoformat(),
+                        "userID": workout.user_id,
+                    },
+                    "data": dict(data),
+                },
+            }
+        )
 
     async def _request(self, payload: Mapping[str, Any]) -> Mapping[str, Any]:
         if self._client is not None:
@@ -93,13 +141,18 @@ class TrainingEnduranceClient:
             headers["x-session-token"] = self._session_token
         if self._cookie:
             headers["Cookie"] = self._cookie
-        response = await client.post(
-            GRAPHQL_URL,
-            json=payload,
-            headers=headers,
-        )
-        response.raise_for_status()
-        body = response.json()
+        try:
+            response = await client.post(
+                GRAPHQL_URL,
+                json=payload,
+                headers=headers,
+            )
+            response.raise_for_status()
+            body = response.json()
+        except (httpx.HTTPError, ValueError) as error:
+            raise TrainingEnduranceError(
+                "Не удалось выполнить запрос Training Endurance"
+            ) from error
         if not isinstance(body, Mapping):
             raise TrainingEnduranceError("GraphQL вернул некорректный ответ")
         errors = body.get("errors")
@@ -151,6 +204,8 @@ def _workout_from_record(record: Any, *, user_id: str) -> Workout | None:
         distance_meters=_integer(details, "distanceInMeters"),
         post_activity_comment=_text(data, "postActivityComment"),
         sort=_integer(record, "sort"),
+        feeling_score=_integer(data, "feelingScore"),
+        exertion_score=_integer(data, "exertionScore"),
     )
 
 

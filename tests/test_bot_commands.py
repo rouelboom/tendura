@@ -10,11 +10,11 @@ class BotCommandsTest(unittest.TestCase):
         commands = [item.command for item in BOT_COMMANDS]
 
         self.assertEqual(
-            ["today", "tomorrow", "week", "comment_coros", "comment"],
-            commands[:5],
+            ["today", "tomorrow", "week", "feedback", "comment_coros", "comment"],
+            commands[:6],
         )
         self.assertEqual(
-            {"t", "tm", "w", "cc", "c", "ok", "x", "e"},
-            set(commands[8:]),
+            {"t", "tm", "w", "f", "cc", "c", "ok", "x", "e"},
+            set(commands[9:]),
         )
-        self.assertEqual("edit", commands[7])
+        self.assertEqual("edit", commands[8])
