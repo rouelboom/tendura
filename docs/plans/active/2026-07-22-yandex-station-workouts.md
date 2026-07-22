@@ -5,7 +5,7 @@
 - Repo: /Users/pavel/Dev/pets/tendura
 - Branches: feature/yandex-station-workouts
 - Created: 2026-07-22 09:18 MSK
-- Updated: 2026-07-22 12:18 MSK
+- Updated: 2026-07-22 12:20 MSK
 - Owner: Codex
 - Icon: link
 
@@ -116,7 +116,7 @@ GetWorkouts result ─> Telegram presenter
 ### 1. Подготовка безопасной рабочей ветки и контрактов
 - [x] Создать или переключиться на `feature/yandex-station-workouts` от согласованной базы, не затрагивая незавершённые изменения других планов.
 - [x] Зафиксировать JSON-фикстуры запросов/ответов Яндекс Диалогов без персональных идентификаторов.
-- [ ] Определить имя приватного навыка и три интента; отдельно записать гарантированные фразы с активационным именем.
+- [x] Определить имя приватного навыка и три интента; отдельно записать гарантированные фразы с активационным именем.
 - [x] Выбрать способ HTTPS-размещения Alice-adapter: существующий сервер за reverse proxy или Yandex Cloud Function; до внешних изменений получить согласование.
 - [x] Если выбранный способ требует новой production-зависимости, отдельно согласовать её до добавления.
 
@@ -136,9 +136,9 @@ GetWorkouts result ─> Telegram presenter
 - [x] Добавить безопасную конфигурацию Alice skill ID, allowed Yandex user ID и параметров выбранного размещения; не выводить значения в логи.
 
 ### 4. Интенты и точные фразы
-- [ ] Настроить интент «Какая сегодня тренировка» и речевые варианты без изменения смысла.
-- [ ] Настроить отдельный интент «Какие тренировки на этой неделе» для понедельника–воскресенья.
-- [ ] Настроить более специфичный интент «Какие ещё тренировки на этой неделе» так, чтобы слово «ещё» выбирало диапазон сегодня–воскресенье и не перехватывалось общим недельным интентом.
+- [x] Настроить интент «Какая сегодня тренировка» и речевые варианты без изменения смысла.
+- [x] Настроить отдельный интент «Какие тренировки на этой неделе» для понедельника–воскресенья.
+- [x] Настроить более специфичный интент «Какие ещё тренировки на этой неделе» так, чтобы слово «ещё» выбирало диапазон сегодня–воскресенье и не перехватывалось общим недельным интентом.
 - [ ] Проверить три фразы в консоли Диалогов как команды активного навыка.
 - [ ] Проверить на реальной Станции прямые короткие фразы и гарантированные формы с активационным именем; зафиксировать фактическую маршрутизацию.
 
@@ -211,6 +211,7 @@ GetWorkouts result ─> Telegram presenter
 - 2026-07-22 12:15 MSK Реализован чистый асинхронный webhook handler: версия протокола, allowlist skill/user, инъецированный clock/timezone, три диапазона, помощь и безопасная ошибка провайдера.
 - 2026-07-22 12:16 MSK Добавлены независимая Alice-валидация настроек, безопасные переменные окружения и composition root без требования Telegram-конфигурации.
 - 2026-07-22 12:18 MSK Выбрана Yandex Cloud Function на поддерживаемом Python 3.14: async entrypoint `alice_function.handler` принимает прямой JSON, raw JSON и HTTP envelope; новых зависимостей не требуется.
+- 2026-07-22 12:20 MSK Зафиксированы имя «Тренировочный помощник», runtime/entrypoint, три grammar-файла и гарантированные команды с активационным именем; manifest связан тестом с webhook-фикстурами.
 
 ## Validation
 - План сопоставлен с `tendura/telegram/bot.py`, `tendura/core/models.py`, `tendura/training_endurance/client.py`, `tendura/config.py` и существующими тестами.
@@ -236,6 +237,8 @@ GetWorkouts result ─> Telegram presenter
 - `.venv/bin/python -m unittest discover -s tests -p 'test_alice_function.py' -v`: успешно, 4 теста.
 - `make test`: успешно после Cloud Function entrypoint, 63 теста.
 - Официальная документация Yandex Cloud 2026-07-22: Python 3.14 поддерживается, async handler разрешён, entrypoint задаётся как `<file>.<function>`, JSON event может приходить словарём или через raw HTTP body.
+- `.venv/bin/python -m unittest discover -s tests -p 'test_alice_deploy_contract.py' -v`: успешно, 2 теста.
+- `make test`: успешно после deploy-контракта, 65 тестов.
 - `git diff --check`: успешно.
 - Production-реализация и внешняя приёмка ещё не выполнялись.
 
@@ -260,9 +263,15 @@ GetWorkouts result ─> Telegram presenter
 - `tests/test_alice_application.py`
 - `alice_function.py`
 - `tests/test_alice_function.py`
+- `deploy/alice/README.md`
+- `deploy/alice/manifest.json`
+- `deploy/alice/intents/workouts.today.grammar`
+- `deploy/alice/intents/workouts.calendar_week.grammar`
+- `deploy/alice/intents/workouts.remaining_calendar_week.grammar`
+- `tests/test_alice_deploy_contract.py`
 
 ## Next Step
-Зафиксировать имя приватного навыка «Тренировочный помощник», три гарантированные фразы с активационным именем и грамматики интентов в `deploy/alice`, затем проверить локальное соответствие intent ID контрактным фикстурам.
+Без вывода персональных данных замерить несколько живых read-only вызовов Training Endurance и локальный полный webhook на текущих секретах окружения; зафиксировать p50/p95 и решить по фактам, нужен ли TTL-кэш.
 
 ## Resume
 1. Прочитать этот файл и план-исследование целиком.

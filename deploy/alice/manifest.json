@@ -1,0 +1,25 @@
+{
+  "skill_name": "Тренировочный помощник",
+  "runtime": "python314",
+  "entrypoint": "alice_function.handler",
+  "intents": [
+    {
+      "id": "workouts.today",
+      "grammar": "intents/workouts.today.grammar",
+      "command": "какая сегодня тренировка",
+      "activation_command": "Алиса, спроси у Тренировочного помощника, какая сегодня тренировка"
+    },
+    {
+      "id": "workouts.calendar_week",
+      "grammar": "intents/workouts.calendar_week.grammar",
+      "command": "какие тренировки на этой неделе",
+      "activation_command": "Алиса, спроси у Тренировочного помощника, какие тренировки на этой неделе"
+    },
+    {
+      "id": "workouts.remaining_calendar_week",
+      "grammar": "intents/workouts.remaining_calendar_week.grammar",
+      "command": "какие ещё тренировки на этой неделе",
+      "activation_command": "Алиса, спроси у Тренировочного помощника, какие ещё тренировки на этой неделе"
+    }
+  ]
+}
