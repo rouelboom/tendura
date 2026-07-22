@@ -44,14 +44,16 @@ HTTP-сервер не пишет тела запросов и ответов в
 
 ## Развёртывание на существующем сервере
 
-1. Установить `deploy/alice/tendura-alice.service` как отдельный systemd unit.
+1. Собрать `dist/tendura-alice.zip` командой `deploy/alice/build.sh` и распаковать
+   его в отдельный `/opt/tendura-alice`, не меняя файлы Telegram-процесса.
+2. Установить `deploy/alice/tendura-alice.service` как отдельный systemd unit.
    Он использует ту же защищённую конфигурацию `/etc/tendura/tendura.env`, но
-   запускает независимый Alice entrypoint.
-2. Установить `deploy/alice/nginx.conf`. Backend слушает только localhost;
+   запускает независимый Alice entrypoint из `/opt/tendura-alice`.
+3. Установить `deploy/alice/nginx.conf`. Backend слушает только localhost;
    наружу публикуются `/alice` и обезличенный `/healthz`.
-3. Получить бесплатный сертификат Let's Encrypt для
+4. Получить бесплатный сертификат Let's Encrypt для
    `138-16-161-115.sslip.io` и включить его автоматическое продление.
-4. Проверить `https://138-16-161-115.sslip.io/healthz`, затем использовать
+5. Проверить `https://138-16-161-115.sslip.io/healthz`, затем использовать
    `https://138-16-161-115.sslip.io/alice` как webhook навыка.
 
 `sslip.io` бесплатно разрешает имя с IP-адресом сервера. Новая платная
