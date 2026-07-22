@@ -5,7 +5,7 @@
 - Repo: /Users/pavel/Dev/pets/tendura
 - Branches: feature/yandex-station-workouts
 - Created: 2026-07-22 09:18 MSK
-- Updated: 2026-07-22 17:20 MSK
+- Updated: 2026-07-22 17:24 MSK
 - Owner: Codex
 - Icon: link
 
@@ -118,7 +118,7 @@ GetWorkouts result ─> Telegram presenter
 - [x] Зафиксировать JSON-фикстуры запросов/ответов Яндекс Диалогов без персональных идентификаторов.
 - [x] Определить имя приватного навыка и три интента; отдельно записать гарантированные фразы с активационным именем.
 - [x] Выбрать способ HTTPS-размещения Alice-adapter: существующий сервер за reverse proxy или Yandex Cloud Function; до внешних изменений получить согласование.
-- [ ] Отдельно согласовать средство выпуска и автоматического продления TLS-сертификата как новую production-зависимость.
+- [x] Отдельно согласовать средство выпуска и автоматического продления TLS-сертификата как новую production-зависимость.
 
 ### 2. Общее application-ядро
 - [x] Добавить порт чтения тренировок и `GetWorkouts`, принимающий явный непустой диапазон дат.
@@ -222,6 +222,7 @@ GetWorkouts result ─> Telegram presenter
 - 2026-07-22 17:11 MSK Исправлен ошибочный вывод предыдущей диагностики: shell `source` обрезал cookie по `;`, тогда как systemd-процесс использует полное рабочее значение. Двадцать запросов с credential работающего процесса успешны: p50 326,6 мс, p95 340,3 мс, максимум 647,3 мс; TTL-кэш не требуется.
 - 2026-07-22 17:18 MSK Авторизация Yandex Cloud CLI выполнена, но создание функции отклонено до создания ресурса; активных функций нет. Из-за отсутствия привязанного платёжного аккаунта и прямого запрета списаний облачное размещение отменено.
 - 2026-07-22 17:20 MSK Добавлен независимый stdlib HTTP entrypoint Алисы с `/alice`, `/healthz`, ограничением тела 64 КБ и отключённым access-log; подготовлены systemd/nginx-конфигурации для существующего сервера без новых Python-зависимостей.
+- 2026-07-22 17:24 MSK После явного подтверждения пользователя на production-сервер из официального Ubuntu-репозитория установлены `certbot` 4.0.0 и nginx-плагин; `certbot.timer` включён и активен. Установка бесплатна и не связана с Yandex Cloud billing.
 
 ## Validation
 - План сопоставлен с `tendura/telegram/bot.py`, `tendura/core/models.py`, `tendura/training_endurance/client.py`, `tendura/config.py` и существующими тестами.
@@ -269,6 +270,7 @@ GetWorkouts result ─> Telegram presenter
 - `.venv/bin/python -m unittest tests.test_alice_server -v`: успешно, 4 теста HTTP entrypoint.
 - `make test`: успешно после self-hosted entrypoint, 76 тестов.
 - `yc serverless function list`: функций нет; неуспешная команда создания вернула `PermissionDenied` и не создала ресурс.
+- Production: `certbot --version` — 4.0.0; `certbot.timer` имеет состояния `enabled` и `active`.
 - Production-реализация и внешняя приёмка ещё не выполнялись.
 
 ## Remaining External Work
@@ -315,7 +317,7 @@ GetWorkouts result ─> Telegram presenter
 - `deploy/alice/nginx.conf`
 
 ## Next Step
-После явного подтверждения новой production-зависимости установить средство выпуска/автопродления бесплатного TLS-сертификата, затем развернуть self-hosted webhook и создать приватный навык Алисы.
+Развернуть self-hosted Alice-процесс и nginx-конфигурацию на существующем сервере, выпустить бесплатный TLS-сертификат и проверить публичный webhook.
 
 ## Resume
 1. Прочитать этот файл и план-исследование целиком.
