@@ -24,6 +24,8 @@ class Settings:
     notification_time: time
     state_db: Path
     coros_oauth_file: Path
+    alice_skill_id: str | None
+    allowed_yandex_user_id: str | None
 
     @classmethod
     def from_environ(cls, environ: dict[str, str] | None = None) -> "Settings":
@@ -40,6 +42,10 @@ class Settings:
             coros_oauth_file=Path(
                 values.get("TENDURA_COROS_OAUTH_FILE", "data/coros-oauth.json")
             ),
+            alice_skill_id=_optional(values, "TENDURA_ALICE_SKILL_ID"),
+            allowed_yandex_user_id=_optional(
+                values, "TENDURA_ALLOWED_YANDEX_USER_ID"
+            ),
         )
 
     def validate_runtime(self) -> None:
@@ -48,6 +54,23 @@ class Settings:
             for name, value in (
                 ("TENDURA_TELEGRAM_TOKEN", self.telegram_token),
                 ("TENDURA_ALLOWED_TELEGRAM_ID", self.allowed_telegram_id),
+                ("TENDURA_TRAINING_ENDURANCE_USER_ID", self.training_endurance_user_id),
+            )
+            if value is None
+        ]
+        if missing:
+            raise ConfigurationError("Не заданы переменные: " + ", ".join(missing))
+        if not self.training_endurance_session and not self.training_endurance_cookie:
+            raise ConfigurationError(
+                "Нужен TENDURA_TRAINING_ENDURANCE_SESSION или TENDURA_TRAINING_ENDURANCE_COOKIE"
+            )
+
+    def validate_alice(self) -> None:
+        missing = [
+            name
+            for name, value in (
+                ("TENDURA_ALICE_SKILL_ID", self.alice_skill_id),
+                ("TENDURA_ALLOWED_YANDEX_USER_ID", self.allowed_yandex_user_id),
                 ("TENDURA_TRAINING_ENDURANCE_USER_ID", self.training_endurance_user_id),
             )
             if value is None

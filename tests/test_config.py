@@ -13,6 +13,8 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual("07:00:00", str(settings.notification_time))
         self.assertEqual("data/tendura.sqlite3", str(settings.state_db))
         self.assertEqual("data/coros-oauth.json", str(settings.coros_oauth_file))
+        self.assertIsNone(settings.alice_skill_id)
+        self.assertIsNone(settings.allowed_yandex_user_id)
 
     def test_runtime_requires_all_credentials(self) -> None:
         with self.assertRaisesRegex(ConfigurationError, "TENDURA_TELEGRAM_TOKEN"):
@@ -51,3 +53,21 @@ class SettingsTest(unittest.TestCase):
         )
 
         settings.validate_runtime()
+
+    def test_alice_requires_skill_user_and_training_credentials(self) -> None:
+        with self.assertRaisesRegex(ConfigurationError, "TENDURA_ALICE_SKILL_ID"):
+            Settings.from_environ({}).validate_alice()
+
+    def test_parses_and_validates_alice_values_without_telegram(self) -> None:
+        settings = Settings.from_environ(
+            {
+                "TENDURA_ALICE_SKILL_ID": "skill-id",
+                "TENDURA_ALLOWED_YANDEX_USER_ID": "yandex-user-id",
+                "TENDURA_TRAINING_ENDURANCE_COOKIE": "ory_kratos_session=value",
+                "TENDURA_TRAINING_ENDURANCE_USER_ID": "athlete-1",
+            }
+        )
+
+        settings.validate_alice()
+        self.assertEqual("skill-id", settings.alice_skill_id)
+        self.assertEqual("yandex-user-id", settings.allowed_yandex_user_id)

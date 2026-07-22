@@ -5,7 +5,7 @@
 - Repo: /Users/pavel/Dev/pets/tendura
 - Branches: feature/yandex-station-workouts
 - Created: 2026-07-22 09:18 MSK
-- Updated: 2026-07-22 12:15 MSK
+- Updated: 2026-07-22 12:16 MSK
 - Owner: Codex
 - Icon: link
 
@@ -132,8 +132,8 @@ GetWorkouts result ─> Telegram presenter
 - [x] Реализовать Alice-presenter для пустого результата, одной и нескольких тренировок; обеспечить понятное произношение дат, времени, длительности и дистанции.
 - [x] Ограничить размер `tts`, а недельный ответ при необходимости сокращать детерминированно, не скрывая факт наличия дополнительных деталей.
 - [x] Реализовать webhook handler формата Яндекс Диалогов и проверку владельца/skill ID.
-- [ ] Добавить отдельный composition root/entrypoint Alice-adapter, переиспользующий application-ядро и `TrainingEnduranceClient`.
-- [ ] Добавить безопасную конфигурацию Alice skill ID, allowed Yandex user ID и параметров выбранного размещения; не выводить значения в логи.
+- [x] Добавить отдельный composition root/entrypoint Alice-adapter, переиспользующий application-ядро и `TrainingEnduranceClient`.
+- [x] Добавить безопасную конфигурацию Alice skill ID, allowed Yandex user ID и параметров выбранного размещения; не выводить значения в логи.
 
 ### 4. Интенты и точные фразы
 - [ ] Настроить интент «Какая сегодня тренировка» и речевые варианты без изменения смысла.
@@ -208,6 +208,7 @@ GetWorkouts result ─> Telegram presenter
 - 2026-07-22 12:12 MSK Добавлен чистый resolver интентов Алисы с приоритетом фразы «ещё», нормализованным fallback по тексту и отказом для неизвестной команды.
 - 2026-07-22 12:13 MSK Добавлен отдельный Alice-presenter с русскими длительностями/дистанциями, ответами для пустого и недельного результата и лимитом TTS 1024 символа.
 - 2026-07-22 12:15 MSK Реализован чистый асинхронный webhook handler: версия протокола, allowlist skill/user, инъецированный clock/timezone, три диапазона, помощь и безопасная ошибка провайдера.
+- 2026-07-22 12:16 MSK Добавлены независимая Alice-валидация настроек, безопасные переменные окружения и composition root без требования Telegram-конфигурации.
 
 ## Validation
 - План сопоставлен с `tendura/telegram/bot.py`, `tendura/core/models.py`, `tendura/training_endurance/client.py`, `tendura/config.py` и существующими тестами.
@@ -227,6 +228,9 @@ GetWorkouts result ─> Telegram presenter
 - `make test`: успешно после Alice-presenter, 49 тестов.
 - `.venv/bin/python -m unittest discover -s tests -p 'test_alice_handler.py' -v`: успешно, 7 тестов.
 - `make test`: успешно после webhook handler, 56 тестов.
+- `.venv/bin/python -m unittest discover -s tests -p 'test_config.py' -v`: успешно, 7 тестов.
+- `.venv/bin/python -m unittest discover -s tests -p 'test_alice_application.py' -v`: успешно, 1 тест.
+- `make test`: успешно после composition root, 59 тестов.
 - `git diff --check`: успешно.
 - Production-реализация и внешняя приёмка ещё не выполнялись.
 
@@ -245,9 +249,13 @@ GetWorkouts result ─> Telegram presenter
 - `tests/test_alice_formatting.py`
 - `tendura/alice/handler.py`
 - `tests/test_alice_handler.py`
+- `.env.example`
+- `tendura/alice/application.py`
+- `tendura/config.py`
+- `tests/test_alice_application.py`
 
 ## Next Step
-Добавить безопасную Alice-конфигурацию и локальный composition root, который создаёт `TrainingEnduranceClient`, `GetWorkouts` и `AliceWebhookHandler`; не добавлять HTTP-сервер, облачный ресурс или production-зависимость.
+Сверить официальные runtime-контракты Yandex Cloud Functions и Яндекс Диалогов, выбрать минимальное HTTPS-размещение без новой production-зависимости и добавить только локальный entrypoint/тест выбранного контракта; облачный ресурс не создавать.
 
 ## Resume
 1. Прочитать этот файл и план-исследование целиком.
