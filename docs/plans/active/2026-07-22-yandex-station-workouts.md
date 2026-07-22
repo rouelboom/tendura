@@ -5,7 +5,7 @@
 - Repo: /Users/pavel/Dev/pets/tendura
 - Branches: feature/yandex-station-workouts
 - Created: 2026-07-22 09:18 MSK
-- Updated: 2026-07-22 12:08 MSK
+- Updated: 2026-07-22 12:10 MSK
 - Owner: Codex
 - Icon: link
 
@@ -122,10 +122,10 @@ GetWorkouts result ─> Telegram presenter
 
 ### 2. Общее application-ядро
 - [x] Добавить порт чтения тренировок и `GetWorkouts`, принимающий явный непустой диапазон дат.
-- [ ] Вынести получение тренировок из `_send_period` в application-слой без Telegram-текстов и Telegram-типов.
+- [x] Вынести получение тренировок из `_send_period` в application-слой без Telegram-текстов и Telegram-типов.
 - [ ] Инъецировать clock/timezone для детерминированного вычисления сегодняшней даты.
 - [ ] Добавить функции диапазонов `today`, `calendar_week` и `remaining_calendar_week` с тестами границ недели.
-- [ ] Перевести `/today`, `/tomorrow`, `/week` на use case и доказать отсутствие изменения Telegram-поведения.
+- [x] Перевести `/today`, `/tomorrow`, `/week` на use case и доказать отсутствие изменения Telegram-поведения.
 
 ### 3. Alice inbound-адаптер
 - [ ] Реализовать чистый parser/intent resolver для `workouts.today`, `workouts.calendar_week`, `workouts.remaining_calendar_week` и fallback-команды помощи.
@@ -146,7 +146,7 @@ GetWorkouts result ─> Telegram presenter
 - [ ] Покрыть application use case тестами успешного результата, пустого календаря и ошибки Training Endurance.
 - [ ] Покрыть диапазоны тестами для понедельника, середины недели, воскресенья и перехода месяца/года.
 - [ ] Покрыть Alice-adapter обезличенными webhook-фикстурами для всех трёх интентов, неизвестной команды и запрещённого пользователя.
-- [ ] Добавить регрессионные тесты Telegram-команд, включая прежний скользящий семидневный `/week`.
+- [x] Добавить регрессионные тесты Telegram-команд, включая прежний скользящий семидневный `/week`.
 - [ ] Замерить живое время ответа Training Endurance и полного webhook; p95 должен оставлять безопасный запас до лимита 4,5 секунды.
 - [ ] Если живой запрос нестабилен, добавить минимальный TTL-кэш read-only результата и тесты его истечения; не кэшировать Telegram/Alice-разметку.
 - [ ] Выполнить `make check`, `make test` и `git diff --check`.
@@ -203,6 +203,7 @@ GetWorkouts result ─> Telegram presenter
 - 2026-07-22 11:56 MSK Добавлены красные TDD-тесты диапазонов `today`, `calendar_week`, `remaining_calendar_week`; production-модуль `tendura.application` намеренно ещё отсутствует.
 - 2026-07-22 12:07 MSK Реализованы минимальные `WorkoutPeriod` и `dates_for_period`; три исходных теста диапазонов переведены в зелёное состояние.
 - 2026-07-22 12:08 MSK Добавлены порт `WorkoutReader` и use case `GetWorkouts`; покрыты успешный, пустой, ошибочный и невалидный сценарии.
+- 2026-07-22 12:10 MSK Telegram-команды чтения переведены на общий `GetWorkouts`; исходные диапазоны и пользовательские ответы сохранены регрессионными тестами.
 
 ## Validation
 - План сопоставлен с `tendura/telegram/bot.py`, `tendura/core/models.py`, `tendura/training_endurance/client.py`, `tendura/config.py` и существующими тестами.
@@ -213,6 +214,8 @@ GetWorkouts result ─> Telegram presenter
 - `.venv/bin/python -m unittest discover -s tests -p 'test_workout_use_cases.py' -v`: ожидаемо красный, `ModuleNotFoundError: tendura.application`; это зафиксированный TDD-контракт следующего шага.
 - `.venv/bin/python -m unittest discover -s tests -p 'test_workout_use_cases.py' -v`: успешно после реализации диапазонов, 3 теста.
 - `.venv/bin/python -m unittest discover -s tests -p 'test_workout_use_cases.py' -v`: успешно после добавления `GetWorkouts`, 7 тестов.
+- `.venv/bin/python -m unittest discover -s tests -p 'test_workout_commands.py' -v`: успешно, 5 тестов.
+- `make test`: успешно, 38 тестов; присутствуют прежние `ResourceWarning` из тестов SQLite-состояния без падений.
 - `git diff --check`: успешно.
 - Production-реализация и внешняя приёмка ещё не выполнялись.
 
@@ -221,11 +224,12 @@ GetWorkouts result ─> Telegram presenter
 - `tests/fixtures/alice/workout_queries.json`
 - `tests/test_alice_contract_fixtures.py`
 - `tests/test_workout_use_cases.py`
+- `tests/test_workout_commands.py`
 - `tendura/application/__init__.py`
 - `tendura/application/workouts.py`
 
 ## Next Step
-Перевести Telegram-команды `/today`, `/tomorrow`, `/week` на `GetWorkouts`, сохранив их текущие диапазоны, ответы и обработку ошибок; добавить регрессионные тесты вызова use case.
+Дополнить тесты диапазонов случаями понедельника, воскресенья и перехода года; затем реализовать чистый Alice intent resolver для трёх интентов и неизвестной команды без webhook и конфигурации.
 
 ## Resume
 1. Прочитать этот файл и план-исследование целиком.

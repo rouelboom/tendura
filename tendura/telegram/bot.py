@@ -17,6 +17,7 @@ from telegram.ext import (
     filters,
 )
 
+from tendura.application.workouts import GetWorkouts
 from tendura.config import Settings
 from tendura.coros.client import CorosClient, CorosError
 from tendura.core.feedback import (
@@ -75,6 +76,9 @@ def build_application(settings: Settings) -> Application:
     )
     application.bot_data["settings"] = settings
     application.bot_data["training_client"] = client
+    application.bot_data["get_workouts"] = GetWorkouts(
+        client, user_id=settings.training_endurance_user_id or ""
+    )
     application.bot_data["coros_client"] = CorosClient(settings.coros_oauth_file)
     application.add_handler(CommandHandler(("today", "t"), _today))
     application.add_handler(CommandHandler(("tomorrow", "tm"), _tomorrow))
@@ -320,11 +324,9 @@ async def _send_period(
     if user.id != settings.allowed_telegram_id:
         await message.reply_text("Доступ к Tendura не разрешён.")
         return
-    client: TrainingEnduranceClient = context.application.bot_data["training_client"]
+    get_workouts: GetWorkouts = context.application.bot_data["get_workouts"]
     try:
-        workouts = await client.workouts(
-            user_id=settings.training_endurance_user_id or "", dates=dates
-        )
+        workouts = await get_workouts.execute(dates)
     except TrainingEnduranceError:
         await message.reply_text("Не удалось получить тренировки. Проверьте сессию Training Endurance.")
         return
