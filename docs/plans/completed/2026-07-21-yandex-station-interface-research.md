@@ -5,7 +5,7 @@
 - Repo: /Users/pavel/Dev/pets/tendura
 - Branches: feature/coros-integration
 - Created: 2026-07-21 23:37 MSK
-- Updated: 2026-07-22 00:06 MSK
+- Updated: 2026-07-22 16:13 MSK
 - Owner: Codex
 
 ## Goal
@@ -159,6 +159,7 @@ Telegram и Alice вызывают внутренний HTTP API. Это луч�
 - 2026-07-21 23:54 MSK По официальной документации подтверждены приватные навыки, запуск с командой, webhook-протокол, интенты, состояние, OAuth и лимит ответа 4,5 секунды.
 - 2026-07-22 00:01 MSK Подтверждены ограничения: навык не инициирует разговор, а голосовой профиль Станции не является аутентификацией пользователя.
 - 2026-07-22 00:06 MSK Сформированы матрица сценариев, три архитектурных варианта, рекомендуемый путь и требования безопасности; исследование завершено.
+- 2026-07-22 16:13 MSK План актуализирован и подготовлен к переносу в `completed`; реализация уже ведётся по отдельному активному плану.
 
 ## Validation
 - Исходный код: команды, общий preview и запись проверены по `tendura/telegram/bot.py`; transport-neutral модели и клиенты — по `tendura/core/models.py`, `tendura/training_endurance/client.py`, `tendura/coros/client.py`.
@@ -171,7 +172,7 @@ Telegram и Alice вызывают внутренний HTTP API. Это луч�
 - `docs/plans/active/2026-07-21-yandex-station-interface-research.md`
 
 ## Next Step
-Если пользователь одобрит реализацию, создать отдельный implementation-план для шага 1: вынести use case’ы из Telegram в `tendura/application` без изменения внешнего поведения.
+Исследование завершено. Реализация продолжается по плану [«Тренировки Tendura через Яндекс Станцию»](../active/2026-07-22-yandex-station-workouts.md).
 
 ## Resume
 1. Прочитать этот файл целиком.
