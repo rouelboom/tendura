@@ -5,7 +5,7 @@
 - Repo: /Users/pavel/Dev/pets/tendura
 - Branches: feature/yandex-station-workouts
 - Created: 2026-07-22 09:18 MSK
-- Updated: 2026-07-22 12:10 MSK
+- Updated: 2026-07-22 12:12 MSK
 - Owner: Codex
 - Icon: link
 
@@ -128,7 +128,7 @@ GetWorkouts result ─> Telegram presenter
 - [x] Перевести `/today`, `/tomorrow`, `/week` на use case и доказать отсутствие изменения Telegram-поведения.
 
 ### 3. Alice inbound-адаптер
-- [ ] Реализовать чистый parser/intent resolver для `workouts.today`, `workouts.calendar_week`, `workouts.remaining_calendar_week` и fallback-команды помощи.
+- [x] Реализовать чистый parser/intent resolver для `workouts.today`, `workouts.calendar_week`, `workouts.remaining_calendar_week` и fallback-команды помощи.
 - [ ] Реализовать Alice-presenter для пустого результата, одной и нескольких тренировок; обеспечить понятное произношение дат, времени, длительности и дистанции.
 - [ ] Ограничить размер `tts`, а недельный ответ при необходимости сокращать детерминированно, не скрывая факт наличия дополнительных деталей.
 - [ ] Реализовать webhook handler формата Яндекс Диалогов и проверку владельца/skill ID.
@@ -205,6 +205,7 @@ GetWorkouts result ─> Telegram presenter
 - 2026-07-22 12:08 MSK Добавлены порт `WorkoutReader` и use case `GetWorkouts`; покрыты успешный, пустой, ошибочный и невалидный сценарии.
 - 2026-07-22 12:10 MSK Telegram-команды чтения переведены на общий `GetWorkouts`; исходные диапазоны и пользовательские ответы сохранены регрессионными тестами.
 - 2026-07-22 12:10 MSK Диапазоны недели покрыты случаями понедельника, воскресенья и перехода года; все 10 application-тестов проходят.
+- 2026-07-22 12:12 MSK Добавлен чистый resolver интентов Алисы с приоритетом фразы «ещё», нормализованным fallback по тексту и отказом для неизвестной команды.
 
 ## Validation
 - План сопоставлен с `tendura/telegram/bot.py`, `tendura/core/models.py`, `tendura/training_endurance/client.py`, `tendura/config.py` и существующими тестами.
@@ -218,6 +219,8 @@ GetWorkouts result ─> Telegram presenter
 - `.venv/bin/python -m unittest discover -s tests -p 'test_workout_commands.py' -v`: успешно, 5 тестов.
 - `make test`: успешно, 38 тестов; присутствуют прежние `ResourceWarning` из тестов SQLite-состояния без падений.
 - `.venv/bin/python -m unittest discover -s tests -p 'test_workout_use_cases.py' -v`: успешно, 10 тестов с границами недели.
+- `.venv/bin/python -m unittest discover -s tests -p 'test_alice_intents.py' -v`: успешно, 4 теста.
+- `make test`: успешно после intent resolver, 45 тестов.
 - `git diff --check`: успешно.
 - Production-реализация и внешняя приёмка ещё не выполнялись.
 
@@ -229,9 +232,12 @@ GetWorkouts result ─> Telegram presenter
 - `tests/test_workout_commands.py`
 - `tendura/application/__init__.py`
 - `tendura/application/workouts.py`
+- `tendura/alice/__init__.py`
+- `tendura/alice/intents.py`
+- `tests/test_alice_intents.py`
 
 ## Next Step
-Реализовать чистый Alice intent resolver для трёх интентов и неизвестной команды без webhook, форматирования и конфигурации.
+Реализовать Alice-presenter для пустого результата, одной и нескольких тренировок с отдельными `text`/`tts` и детерминированным ограничением длины; webhook пока не добавлять.
 
 ## Resume
 1. Прочитать этот файл и план-исследование целиком.
