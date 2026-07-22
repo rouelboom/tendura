@@ -5,7 +5,7 @@
 - Repo: /Users/pavel/Dev/pets/tendura
 - Branches: feature/yandex-station-workouts
 - Created: 2026-07-22 09:18 MSK
-- Updated: 2026-07-22 11:56 MSK
+- Updated: 2026-07-22 12:07 MSK
 - Owner: Codex
 - Icon: link
 
@@ -201,6 +201,7 @@ GetWorkouts result ─> Telegram presenter
 - 2026-07-22 11:56 MSK От `main` создана целевая ветка `feature/yandex-station-workouts`; незакоммиченные plan-файлы сохранены без изменений.
 - 2026-07-22 11:56 MSK Добавлена обезличенная JSON-фикстура трёх запросов/ответов Яндекс Диалогов и проверка её контракта.
 - 2026-07-22 11:56 MSK Добавлены красные TDD-тесты диапазонов `today`, `calendar_week`, `remaining_calendar_week`; production-модуль `tendura.application` намеренно ещё отсутствует.
+- 2026-07-22 12:07 MSK Реализованы минимальные `WorkoutPeriod` и `dates_for_period`; три исходных теста диапазонов переведены в зелёное состояние.
 
 ## Validation
 - План сопоставлен с `tendura/telegram/bot.py`, `tendura/core/models.py`, `tendura/training_endurance/client.py`, `tendura/config.py` и существующими тестами.
@@ -209,6 +210,7 @@ GetWorkouts result ─> Telegram presenter
 - `make check`: успешно.
 - `.venv/bin/python -m unittest discover -s tests -p 'test_alice_contract_fixtures.py' -v`: успешно, 1 тест.
 - `.venv/bin/python -m unittest discover -s tests -p 'test_workout_use_cases.py' -v`: ожидаемо красный, `ModuleNotFoundError: tendura.application`; это зафиксированный TDD-контракт следующего шага.
+- `.venv/bin/python -m unittest discover -s tests -p 'test_workout_use_cases.py' -v`: успешно после реализации диапазонов, 3 теста.
 - `git diff --check`: успешно.
 - Production-реализация и внешняя приёмка ещё не выполнялись.
 
@@ -217,9 +219,11 @@ GetWorkouts result ─> Telegram presenter
 - `tests/fixtures/alice/workout_queries.json`
 - `tests/test_alice_contract_fixtures.py`
 - `tests/test_workout_use_cases.py`
+- `tendura/application/__init__.py`
+- `tendura/application/workouts.py`
 
 ## Next Step
-Реализовать минимальные `WorkoutPeriod` и `dates_for_period` в `tendura/application/workouts.py`, чтобы сделать три теста диапазонов зелёными, не начиная перенос Telegram-обработчиков.
+Добавить порт `WorkoutReader` и use case `GetWorkouts` с тестами успешного результата, пустого календаря и ошибки провайдера; Telegram пока не менять.
 
 ## Resume
 1. Прочитать этот файл и план-исследование целиком.
