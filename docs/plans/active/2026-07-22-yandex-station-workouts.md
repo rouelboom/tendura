@@ -5,7 +5,7 @@
 - Repo: /Users/pavel/Dev/pets/tendura
 - Branches: feature/yandex-station-workouts
 - Created: 2026-07-22 09:18 MSK
-- Updated: 2026-07-22 12:22 MSK
+- Updated: 2026-07-22 12:27 MSK
 - Owner: Codex
 - Icon: link
 
@@ -143,7 +143,7 @@ GetWorkouts result ─> Telegram presenter
 - [ ] Проверить на реальной Станции прямые короткие фразы и гарантированные формы с активационным именем; зафиксировать фактическую маршрутизацию.
 
 ### 5. Тесты и производительность
-- [ ] Покрыть application use case тестами успешного результата, пустого календаря и ошибки Training Endurance.
+- [x] Покрыть application use case тестами успешного результата, пустого календаря и ошибки Training Endurance.
 - [x] Покрыть диапазоны тестами для понедельника, середины недели, воскресенья и перехода месяца/года.
 - [x] Покрыть Alice-adapter обезличенными webhook-фикстурами для всех трёх интентов, неизвестной команды и запрещённого пользователя.
 - [x] Добавить регрессионные тесты Telegram-команд, включая прежний скользящий семидневный `/week`.
@@ -156,7 +156,7 @@ GetWorkouts result ─> Telegram presenter
 - [ ] Опубликовать приватную конфигурацию/интенты и ограничить доступ аккаунтом владельца.
 - [ ] Провести ручную приёмку на Станции: три фразы, отсутствие тренировок, одна тренировка, несколько тренировок, воскресенье, ошибка Training Endurance.
 - [ ] Проверить, что в логах нет содержания тренировок, cookie, токенов и идентификаторов пользователя.
-- [ ] Обновить README инструкциями по локальному тесту webhook, настройке приватного навыка и отзыву доступа.
+- [x] Обновить README инструкциями по локальному тесту webhook, настройке приватного навыка и отзыву доступа.
 - [ ] Обновить этот план по фактическому результату и перенести в completed после завершения.
 
 ## Expected Files
@@ -213,6 +213,7 @@ GetWorkouts result ─> Telegram presenter
 - 2026-07-22 12:18 MSK Выбрана Yandex Cloud Function на поддерживаемом Python 3.14: async entrypoint `alice_function.handler` принимает прямой JSON, raw JSON и HTTP envelope; новых зависимостей не требуется.
 - 2026-07-22 12:20 MSK Зафиксированы имя «Тренировочный помощник», runtime/entrypoint, три grammar-файла и гарантированные команды с активационным именем; manifest связан тестом с webhook-фикстурами.
 - 2026-07-22 12:22 MSK Live latency-gate остановлен внешним состоянием: локальная `.env` отсутствует, production Training Endurance вернул HTTP 200 с GraphQL-ошибкой при активном `tendura.service`; персональные данные и тексты ошибок не выводились.
+- 2026-07-22 12:27 MSK Добавлена воспроизводимая сборка минимального ZIP для Cloud Function, исключающая Telegram, COROS, данные, конфигурацию и bytecode; README дополнен локальной проверкой, настройкой приватного навыка и отзывом доступа.
 
 ## Validation
 - План сопоставлен с `tendura/telegram/bot.py`, `tendura/core/models.py`, `tendura/training_endurance/client.py`, `tendura/config.py` и существующими тестами.
@@ -242,6 +243,8 @@ GetWorkouts result ─> Telegram presenter
 - `make test`: успешно после deploy-контракта, 65 тестов.
 - Production latency diagnostic: `tendura.service` активен, транспортный HTTP-ответ Training Endurance равен 200, но GraphQL содержит `errors`; p50/p95 не измерены до восстановления сессии/контракта.
 - Решение по TTL-кэшу отложено: добавлять его без фактических p95 и успешного live-контракта нельзя.
+- `.venv/bin/python -m unittest discover -s tests -p 'test_alice_package.py' -v`: успешно, архив содержит runtime-файлы и не содержит Telegram, COROS, `.env`, данных и bytecode.
+- `deploy/alice/build.sh` и `unzip -l dist/tendura-alice.zip`: успешно, сформирован минимальный архив из 20 записей; `dist/` исключён из Git.
 - `git diff --check`: успешно.
 - Production-реализация и внешняя приёмка ещё не выполнялись.
 
@@ -272,9 +275,14 @@ GetWorkouts result ─> Telegram presenter
 - `deploy/alice/intents/workouts.calendar_week.grammar`
 - `deploy/alice/intents/workouts.remaining_calendar_week.grammar`
 - `tests/test_alice_deploy_contract.py`
+- `.gitignore`
+- `deploy/alice/build.sh`
+- `deploy/alice/requirements.txt`
+- `tests/test_alice_package.py`
+- `README.md`
 
 ## Next Step
-Подготовить воспроизводимую упаковку Yandex Cloud Function без новой зависимости и обновить README инструкциями по локальному контрактному тесту, приватному навыку, переменным окружения и отзыву доступа.
+Проверить весь проект и собранный Alice-adapter на целевом runtime Python 3.14 в изолированном окружении без изменения production-зависимостей.
 
 ## Resume
 1. Прочитать этот файл и план-исследование целиком.
