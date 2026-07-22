@@ -5,7 +5,7 @@
 - Repo: /Users/pavel/Dev/pets/tendura
 - Branches: feature/yandex-station-workouts
 - Created: 2026-07-22 09:18 MSK
-- Updated: 2026-07-22 17:32 MSK
+- Updated: 2026-07-22 17:34 MSK
 - Owner: Codex
 - Icon: link
 
@@ -225,6 +225,7 @@ GetWorkouts result ─> Telegram presenter
 - 2026-07-22 17:24 MSK После явного подтверждения пользователя на production-сервер из официального Ubuntu-репозитория установлены `certbot` 4.0.0 и nginx-плагин; `certbot.timer` включён и активен. Установка бесплатна и не связана с Yandex Cloud billing.
 - 2026-07-22 17:32 MSK В `/opt/tendura-alice` развёрнут изолированный Alice-процесс, nginx публикует только `/alice` и `/healthz`, HTTP перенаправляется на HTTPS. Сертификат Let's Encrypt выпущен для `138-16-161-115.sslip.io`, пробное продление успешно.
 - 2026-07-22 17:32 MSK Двадцать сквозных запросов через публичный HTTPS webhook с live Training Endurance успешны: p50 454,7 мс, p95 573,4 мс, максимум 845,4 мс; ответы и тренировочные данные не выводились.
+- 2026-07-22 17:34 MSK Яндекс Диалоги открыты под аккаунтом владельца, но создание навыка остановлено обязательным требованием платформы включить 2FA. Страница настройки Яндекс ID открыта для ручного изменения способа входа; backend продолжает работать с bootstrap allowlist.
 
 ## Validation
 - План сопоставлен с `tendura/telegram/bot.py`, `tendura/core/models.py`, `tendura/training_endurance/client.py`, `tendura/config.py` и существующими тестами.
@@ -280,6 +281,7 @@ GetWorkouts result ─> Telegram presenter
 
 ## Remaining External Work
 - Связать готовый HTTPS webhook с приватным навыком и заменить bootstrap allowlist на фактические skill ID и Yandex user ID.
+- Включить 2FA в Яндекс ID вручную: это изменение способа аутентификации нельзя выполнять от имени пользователя.
 - Проверить интенты в консоли Диалогов и команды на реальной Станции, включая негарантированные короткие фразы без активационного имени.
 - Проверить фактические systemd/nginx-логи и завершить ручную приёмку; после этого план можно перенести в completed.
 
@@ -322,7 +324,7 @@ GetWorkouts result ─> Telegram presenter
 - `deploy/alice/nginx.conf`
 
 ## Next Step
-Создать приватный навык «Тренировочный помощник» в Яндекс Диалогах, указать `https://138-16-161-115.sslip.io/alice`, настроить три интента и получить фактические skill/user ID для allowlist.
+После ручного включения 2FA обновить Яндекс Диалоги, создать приватный навык «Тренировочный помощник», указать `https://138-16-161-115.sslip.io/alice`, настроить три интента и получить фактические skill/user ID для allowlist.
 
 ## Resume
 1. Прочитать этот файл и план-исследование целиком.
