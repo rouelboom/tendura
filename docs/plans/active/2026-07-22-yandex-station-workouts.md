@@ -5,7 +5,7 @@
 - Repo: /Users/pavel/Dev/pets/tendura
 - Branches: feature/yandex-station-workouts
 - Created: 2026-07-22 09:18 MSK
-- Updated: 2026-07-22 12:38 MSK
+- Updated: 2026-07-22 12:41 MSK
 - Owner: Codex
 - Icon: link
 
@@ -149,7 +149,7 @@ GetWorkouts result ─> Telegram presenter
 - [x] Добавить регрессионные тесты Telegram-команд, включая прежний скользящий семидневный `/week`.
 - [ ] Замерить живое время ответа Training Endurance и полного webhook; p95 должен оставлять безопасный запас до лимита 4,5 секунды.
 - [ ] Если живой запрос нестабилен, добавить минимальный TTL-кэш read-only результата и тесты его истечения; не кэшировать Telegram/Alice-разметку.
-- [ ] Выполнить `make check`, `make test` и `git diff --check`.
+- [x] Выполнить `make check`, `make test` и `git diff --check`.
 
 ### 6. Приватный навык и приёмка
 - [ ] После согласования создать приватный навык, HTTPS endpoint и секреты окружения вне Git.
@@ -217,6 +217,7 @@ GetWorkouts result ─> Telegram presenter
 - 2026-07-22 12:31 MSK В изолированном окружении Python 3.14.6 успешно скомпилированы исходники и пройдены все 66 тестов; production-зависимости и lock-файл не изменялись.
 - 2026-07-22 12:35 MSK Добавлены шесть сквозных acceptance-тестов от HTTP envelope Cloud Function через application use case до ответа Алисы: три команды, пустой календарь, воскресенье и безопасная ошибка провайдера.
 - 2026-07-22 12:38 MSK Локальный security-аудит не обнаружил захардкоженных session/token-паттернов; Alice/application-код не логирует запросы и ответы, deploy-архив повторно проверен по полному списку файлов.
+- 2026-07-22 12:41 MSK Весь доступный без внешних изменений объём завершён: 72 теста, compileall, diff-check и проверка целостности deploy-архива успешны. Открыты только live latency, облачное размещение, консоль Диалогов и приёмка на Станции.
 
 ## Validation
 - План сопоставлен с `tendura/telegram/bot.py`, `tendura/core/models.py`, `tendura/training_endurance/client.py`, `tendura/config.py` и существующими тестами.
@@ -255,8 +256,16 @@ GetWorkouts result ─> Telegram presenter
 - `git grep -Il` по паттернам Training Endurance session и Telegram bot token: совпадений в отслеживаемых файлах нет.
 - `rg` по вызовам `print`/`logging`/`logger` в Alice/application entrypoint и модулях: совпадений нет.
 - `unzip -Z1 dist/tendura-alice.zip`: подтверждён только ожидаемый runtime-состав; секретов, пользовательских данных и посторонних адаптеров нет.
+- Финальные `make check`, `make test`, `git diff --check`: успешно, 72 теста.
+- `unzip -t dist/tendura-alice.zip`: успешно, ошибок сжатых данных нет.
 - `git diff --check`: успешно.
 - Production-реализация и внешняя приёмка ещё не выполнялись.
+
+## Remaining External Work
+- Восстановить рабочую сессию или GraphQL-контракт Training Endurance и повторить p50/p95 latency-gate; только по результату решать вопрос TTL-кэша.
+- После отдельного согласования создать Cloud Function, передать секреты окружения вне Git и связать приватный навык.
+- Проверить интенты в консоли Диалогов и команды на реальной Станции, включая негарантированные короткие фразы без активационного имени.
+- Проверить фактические облачные логи и завершить ручную приёмку; после этого план можно перенести в completed.
 
 ## Touched Files
 - `docs/plans/active/2026-07-22-yandex-station-workouts.md`
@@ -293,7 +302,7 @@ GetWorkouts result ─> Telegram presenter
 - `tests/test_alice_end_to_end.py`
 
 ## Next Step
-Выполнить финальные `make check`, `make test`, `git diff --check` и сверить остаток плана с действиями, требующими внешнего согласования или восстановления Training Endurance.
+Восстановить рабочую сессию/GraphQL-контракт Training Endurance и повторить live p50/p95 latency-gate; затем после отдельного согласования развернуть приватный навык и провести приёмку на Станции.
 
 ## Resume
 1. Прочитать этот файл и план-исследование целиком.
