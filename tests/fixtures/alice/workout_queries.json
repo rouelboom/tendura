@@ -1,0 +1,134 @@
+[
+  {
+    "name": "today",
+    "request": {
+      "meta": {
+        "locale": "ru-RU",
+        "timezone": "Europe/Moscow",
+        "client_id": "test.station",
+        "interfaces": {}
+      },
+      "request": {
+        "command": "какая сегодня тренировка",
+        "original_utterance": "какая сегодня тренировка",
+        "type": "SimpleUtterance",
+        "nlu": {
+          "intents": {
+            "workouts.today": {
+              "slots": {}
+            }
+          }
+        }
+      },
+      "session": {
+        "message_id": 0,
+        "session_id": "test-session-today",
+        "skill_id": "test-skill-id",
+        "user": {
+          "user_id": "test-yandex-user-id"
+        },
+        "application": {
+          "application_id": "test-application-id"
+        },
+        "new": true
+      },
+      "version": "1.0"
+    },
+    "response": {
+      "response": {
+        "text": "Сегодня: восстановительный кросс, один час.",
+        "tts": "Сегодня: восстановительный кросс, один час.",
+        "end_session": true
+      },
+      "version": "1.0"
+    }
+  },
+  {
+    "name": "calendar_week",
+    "request": {
+      "meta": {
+        "locale": "ru-RU",
+        "timezone": "Europe/Moscow",
+        "client_id": "test.station",
+        "interfaces": {}
+      },
+      "request": {
+        "command": "какие тренировки на этой неделе",
+        "original_utterance": "какие тренировки на этой неделе",
+        "type": "SimpleUtterance",
+        "nlu": {
+          "intents": {
+            "workouts.calendar_week": {
+              "slots": {}
+            }
+          }
+        }
+      },
+      "session": {
+        "message_id": 0,
+        "session_id": "test-session-calendar-week",
+        "skill_id": "test-skill-id",
+        "user": {
+          "user_id": "test-yandex-user-id"
+        },
+        "application": {
+          "application_id": "test-application-id"
+        },
+        "new": true
+      },
+      "version": "1.0"
+    },
+    "response": {
+      "response": {
+        "text": "На этой неделе: в понедельник — лёгкий кросс; в среду — интервалы; в субботу — длительный бег.",
+        "tts": "На этой неделе: в понедельник — лёгкий кросс; в среду — интервалы; в субботу — длительный бег.",
+        "end_session": true
+      },
+      "version": "1.0"
+    }
+  },
+  {
+    "name": "remaining_calendar_week",
+    "request": {
+      "meta": {
+        "locale": "ru-RU",
+        "timezone": "Europe/Moscow",
+        "client_id": "test.station",
+        "interfaces": {}
+      },
+      "request": {
+        "command": "какие ещё тренировки на этой неделе",
+        "original_utterance": "какие ещё тренировки на этой неделе",
+        "type": "SimpleUtterance",
+        "nlu": {
+          "intents": {
+            "workouts.remaining_calendar_week": {
+              "slots": {}
+            }
+          }
+        }
+      },
+      "session": {
+        "message_id": 0,
+        "session_id": "test-session-remaining-calendar-week",
+        "skill_id": "test-skill-id",
+        "user": {
+          "user_id": "test-yandex-user-id"
+        },
+        "application": {
+          "application_id": "test-application-id"
+        },
+        "new": true
+      },
+      "version": "1.0"
+    },
+    "response": {
+      "response": {
+        "text": "С сегодняшнего дня: в среду — интервалы; в субботу — длительный бег.",
+        "tts": "С сегодняшнего дня: в среду — интервалы; в субботу — длительный бег.",
+        "end_session": true
+      },
+      "version": "1.0"
+    }
+  }
+]
