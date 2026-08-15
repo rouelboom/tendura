@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from html import escape
 
-import httpx
 from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
 from telegram.constants import ParseMode
 from telegram.ext import (
@@ -17,7 +16,6 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-from telegram.request import HTTPXRequest
 
 from tendura.application.workouts import GetWorkouts
 from tendura.config import Settings
@@ -73,8 +71,6 @@ def build_application(settings: Settings) -> Application:
     application = (
         Application.builder()
         .token(settings.telegram_token or "")
-        .request(_telegram_request())
-        .get_updates_request(_telegram_request())
         .post_init(_set_commands)
         .build()
     )
@@ -104,11 +100,6 @@ def build_application(settings: Settings) -> Application:
     )
     schedule_daily_notifications(application)
     return application
-
-
-def _telegram_request() -> HTTPXRequest:
-    transport = httpx.AsyncHTTPTransport(local_address="0.0.0.0")
-    return HTTPXRequest(httpx_kwargs={"transport": transport})
 
 
 async def _set_commands(application: Application) -> None:
