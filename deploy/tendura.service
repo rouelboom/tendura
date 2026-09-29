@@ -2,6 +2,8 @@
 Description=Tendura Telegram bot
 After=network-online.target
 Wants=network-online.target
+Requires=xray-tendura.service
+After=xray-tendura.service
 
 [Service]
 Type=simple

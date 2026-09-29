@@ -31,6 +31,7 @@ set -a; source .env; set +a
 ## Развёртывание
 
 Сервис использует `/opt/tendura`, конфигурацию `/etc/tendura/tendura.env`, OAuth-файл `/etc/tendura/coros-oauth.json` с правами `600` и unit-файл `deploy/tendura.service`.
+Для доступа бота к Telegram через локальный Xray задайте `TENDURA_TELEGRAM_PROXY=http://127.0.0.1:8080`. Настройка применяется к отправке запросов и получению обновлений Telegram; клиент Training Endurance работает напрямую. Xray запускается отдельным `deploy/xray-tendura.service`, а конфигурация с ключами хранится только на сервере в `/etc/xray/config.json`.
 
 ## Приватный навык Алисы
 

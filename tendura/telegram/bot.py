@@ -68,12 +68,16 @@ def build_application(settings: Settings) -> Application:
         settings.training_endurance_session,
         cookie=settings.training_endurance_cookie,
     )
-    application = (
+    builder = (
         Application.builder()
         .token(settings.telegram_token or "")
         .post_init(_set_commands)
-        .build()
     )
+    if settings.telegram_proxy:
+        builder = builder.proxy(settings.telegram_proxy).get_updates_proxy(
+            settings.telegram_proxy
+        )
+    application = builder.build()
     application.bot_data["settings"] = settings
     application.bot_data["training_client"] = client
     application.bot_data["get_workouts"] = GetWorkouts(

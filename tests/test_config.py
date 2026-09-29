@@ -15,6 +15,7 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual("data/coros-oauth.json", str(settings.coros_oauth_file))
         self.assertIsNone(settings.alice_skill_id)
         self.assertIsNone(settings.allowed_yandex_user_id)
+        self.assertIsNone(settings.telegram_proxy)
 
     def test_runtime_requires_all_credentials(self) -> None:
         with self.assertRaisesRegex(ConfigurationError, "TENDURA_TELEGRAM_TOKEN"):
@@ -24,6 +25,7 @@ class SettingsTest(unittest.TestCase):
         settings = Settings.from_environ(
             {
                 "TENDURA_TELEGRAM_TOKEN": "token",
+                "TENDURA_TELEGRAM_PROXY": "http://127.0.0.1:8080",
                 "TENDURA_ALLOWED_TELEGRAM_ID": "123",
                 "TENDURA_TRAINING_ENDURANCE_SESSION": "session",
                 "TENDURA_TRAINING_ENDURANCE_USER_ID": "user-id",
@@ -37,6 +39,7 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(123, settings.allowed_telegram_id)
         self.assertEqual("UTC", str(settings.timezone))
         self.assertEqual("09:30:00", str(settings.notification_time))
+        self.assertEqual("http://127.0.0.1:8080", settings.telegram_proxy)
 
     def test_rejects_invalid_telegram_id(self) -> None:
         with self.assertRaisesRegex(ConfigurationError, "должен быть целым"):

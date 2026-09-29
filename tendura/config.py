@@ -16,6 +16,7 @@ class ConfigurationError(ValueError):
 @dataclass(frozen=True)
 class Settings:
     telegram_token: str | None
+    telegram_proxy: str | None
     allowed_telegram_id: int | None
     training_endurance_session: str | None
     training_endurance_cookie: str | None
@@ -32,6 +33,7 @@ class Settings:
         values = os.environ if environ is None else environ
         return cls(
             telegram_token=_optional(values, "TENDURA_TELEGRAM_TOKEN"),
+            telegram_proxy=_optional(values, "TENDURA_TELEGRAM_PROXY"),
             allowed_telegram_id=_optional_int(values, "TENDURA_ALLOWED_TELEGRAM_ID"),
             training_endurance_session=_optional(values, "TENDURA_TRAINING_ENDURANCE_SESSION"),
             training_endurance_cookie=_optional(values, "TENDURA_TRAINING_ENDURANCE_COOKIE"),
