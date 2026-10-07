@@ -12,6 +12,10 @@ EnvironmentFile=/etc/tendura/tendura.env
 ExecStart=/opt/tendura/.venv/bin/python -m tendura
 Restart=on-failure
 RestartSec=5
+WatchdogSec=120
+WatchdogSignal=SIGTERM
+NotifyAccess=main
+TimeoutStopSec=15
 
 [Install]
 WantedBy=multi-user.target

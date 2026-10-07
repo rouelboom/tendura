@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from html import escape
 
+from httpx import Limits
 from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
 from telegram.constants import ParseMode
 from telegram.ext import (
@@ -30,6 +31,7 @@ from tendura.core.feedback import (
 from tendura.core.models import Workout
 from tendura.telegram.formatting import format_workouts
 from tendura.telegram.notifications import schedule_daily_notifications
+from tendura.telegram.polling import PollingRequest
 from tendura.training_endurance.client import TrainingEnduranceClient, TrainingEnduranceError
 
 
@@ -73,10 +75,18 @@ def build_application(settings: Settings) -> Application:
         .token(settings.telegram_token or "")
         .post_init(_set_commands)
     )
+    # Закрываем соединение после каждого long poll, чтобы не зависеть от старого туннеля Xray.
+    polling_request = PollingRequest(
+        connection_pool_size=1,
+        proxy=settings.telegram_proxy,
+        httpx_kwargs={
+            "limits": Limits(max_connections=1, max_keepalive_connections=0),
+            "trust_env": False,
+        },
+    )
+    builder = builder.get_updates_request(polling_request)
     if settings.telegram_proxy:
-        builder = builder.proxy(settings.telegram_proxy).get_updates_proxy(
-            settings.telegram_proxy
-        )
+        builder = builder.proxy(settings.telegram_proxy)
     application = builder.build()
     application.bot_data["settings"] = settings
     application.bot_data["training_client"] = client
