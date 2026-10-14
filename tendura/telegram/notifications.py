@@ -30,7 +30,7 @@ async def _send_daily_notification(context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     client: TrainingEnduranceClient = context.application.bot_data["training_client"]
     try:
-        workouts = await client.workouts(
+        workouts = await client.calendar_entries(
             user_id=settings.training_endurance_user_id or "", dates=[now.date()]
         )
     except TrainingEnduranceError:

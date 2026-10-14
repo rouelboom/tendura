@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 from alice_function import handle_event
 from tendura.alice.handler import AliceWebhookHandler
 from tendura.application.workouts import GetWorkouts
-from tendura.core.models import Workout
+from tendura.core.models import CalendarActivity, CalendarEntry, Workout
 from tendura.training_endurance.client import TrainingEnduranceError
 
 
@@ -40,7 +40,7 @@ def workout(day: date, title: str) -> Workout:
 class RecordingReader:
     def __init__(
         self,
-        workouts: Sequence[Workout] = (),
+        workouts: Sequence[CalendarEntry] = (),
         *,
         error: TrainingEnduranceError | None = None,
     ) -> None:
@@ -48,9 +48,9 @@ class RecordingReader:
         self.error = error
         self.requested_dates: list[date] = []
 
-    async def workouts(
+    async def calendar_entries(
         self, *, user_id: str, dates: Sequence[date]
-    ) -> list[Workout]:
+    ) -> list[CalendarEntry]:
         self.requested_dates = list(dates)
         if self.error is not None:
             raise self.error
@@ -91,6 +91,37 @@ class AliceEndToEndTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual([date(2026, 7, 22)], reader.requested_dates)
         self.assertIn("Восстановительный кросс", response["response"]["text"])
+
+    async def test_today_returns_coach_calendar_event(self) -> None:
+        reader = RecordingReader([CalendarActivity(
+            "event", date(2026, 7, 22), "athlete-1",
+            "Групповая тренировка в 19:00", "EVENT", comment="Встречаемся у стадиона",
+        )])
+
+        response = await self.invoke("today", reader)
+
+        self.assertIn("Групповая тренировка в 19:00", response["response"]["tts"])
+        self.assertIn("Встречаемся у стадиона", response["response"]["tts"])
+        self.assertNotIn("тренировки нет", response["response"]["tts"])
+
+    async def test_today_returns_coach_rest_description(self) -> None:
+        reader = RecordingReader([CalendarActivity(
+            "rest", date(2026, 7, 22), "athlete-1", "Выходной", "REST",
+            description="Отдыхайте, завтра интервалы",
+        )])
+
+        response = await self.invoke("today", reader)
+
+        self.assertIn("Выходной, Отдыхайте, завтра интервалы", response["response"]["tts"])
+
+    async def test_today_rest_without_description_says_no_workouts(self) -> None:
+        reader = RecordingReader([CalendarActivity(
+            "rest", date(2026, 7, 22), "athlete-1", "День отдыха", "REST",
+        )])
+
+        response = await self.invoke("today", reader)
+
+        self.assertEqual("Сегодня: День отдыха, тренировок нет.", response["response"]["tts"])
 
     async def test_calendar_week_returns_past_and_future_workouts(self) -> None:
         reader = RecordingReader(
