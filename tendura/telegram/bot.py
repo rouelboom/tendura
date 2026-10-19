@@ -31,7 +31,6 @@ from tendura.core.feedback import (
     EXERTION_OPTIONS,
     FEELING_OPTIONS,
     FeedbackOption,
-    option_by_api_value,
     option_by_display_value,
 )
 from tendura.core.models import Workout
@@ -53,14 +52,17 @@ BOT_COMMANDS = (
     BotCommand("edit", "Изменить подготовленный отчёт"),
 )
 
-COMMENT_WINDOW_DAYS = 7
+WORKOUT_WINDOW_DAYS = 7
 
 
 @dataclass
-class PendingFeedback:
-    workout: Workout
+class FeedbackDraft:
+    token: str
+    candidates: dict[str, Workout] = field(default_factory=dict)
+    workout: Workout | None = None
     feeling: FeedbackOption | None = None
     exertion: FeedbackOption | None = None
+    stage: Literal["select", "rating", "saving"] = "select"
 
 
 @dataclass
@@ -150,39 +152,13 @@ async def _prepare_feedback(
 ) -> None:
     if not await _allowed(update, context):
         return
-    context.user_data.pop("pending_feedback", None)
-    context.user_data.pop("feedback_candidates", None)
-    message = update.effective_message
     settings: Settings = context.application.bot_data["settings"]
-    client: TrainingEnduranceClient = context.application.bot_data["training_client"]
-    today = datetime.now(settings.timezone).date()
-    week_dates = dates_for_period(WorkoutPeriod.CALENDAR_WEEK, today=today)
-    try:
-        workouts = await client.workouts(
-            user_id=settings.training_endurance_user_id or "", dates=week_dates
-        )
-    except TrainingEnduranceError:
-        await message.reply_text(
-            "Не удалось получить тренировки. Проверьте сессию Training Endurance."
-        )
-        return
-
-    candidates = _feedback_candidates(workouts, today=today)
-    if not candidates:
-        await message.reply_text(
-            "За текущую неделю нет тренировок без полного feedback."
-        )
-        return
-    if len(candidates) > 1:
-        context.user_data["feedback_candidates"] = {
-            workout.id: workout for workout in candidates
-        }
-        await message.reply_text(
-            _feedback_selection_text(len(candidates)),
-            reply_markup=_feedback_selection_keyboard(candidates, today=today),
-        )
-        return
-    await _show_feedback_options(message, context, candidates[0])
+    draft = FeedbackDraft(secrets.token_hex(4))
+    context.user_data["feedback_draft"] = draft
+    end = datetime.now(settings.timezone).date()
+    await _offer_workouts(
+        update.effective_message, context, draft, _workout_window(end), auto_select=True
+    )
 
 
 async def _feedback_callback(
@@ -194,58 +170,37 @@ async def _feedback_callback(
     await query.answer()
     if not await _allowed(update, context):
         return
-    data = query.data or ""
-    if data == "feedback:cancel":
-        context.user_data.pop("pending_feedback", None)
-        context.user_data.pop("feedback_candidates", None)
-        await query.edit_message_text("Оценка тренировки отменена.")
-        return
-    if data.startswith("feedback:select:"):
-        candidates = context.user_data.get("feedback_candidates")
-        workout_id = data.split(":", 2)[-1]
-        workout = candidates.get(workout_id) if isinstance(candidates, dict) else None
-        if not isinstance(workout, Workout):
-            await query.edit_message_text(
-                "Этот выбор уже неактуален. Запустите /feedback заново."
-            )
-            return
-        context.user_data.pop("feedback_candidates", None)
-        await _show_feedback_options(query, context, workout)
-        return
-    pending = context.user_data.get("pending_feedback")
-    if not isinstance(pending, PendingFeedback):
+    _, token, action, value = ((query.data or "").split(":", 3) + ["", "", ""])[:4]
+    draft = context.user_data.get("feedback_draft")
+    if not isinstance(draft, FeedbackDraft) or draft.token != token:
         await query.edit_message_text(
             "Этот выбор уже неактуален. Запустите /feedback заново."
         )
         return
-    if data == "feedback:restart":
-        pending.feeling = None
-        pending.exertion = None
-        await query.edit_message_text(
-            _options_text(
-                "Самочувствие",
-                "Как вы чувствовали себя во время тренировки? Выберите один вариант.",
-                FEELING_OPTIONS,
-            ),
-            parse_mode=ParseMode.HTML,
-            reply_markup=_options_keyboard("feeling", FEELING_OPTIONS),
-        )
+    if draft.stage == "saving":
         return
-    if data == "feedback:confirm":
-        await _save_feedback(query, context, pending)
+    if action == "cancel":
+        context.user_data.pop("feedback_draft", None)
+        await query.edit_message_text("Оценка тренировки отменена.")
         return
-    parts = data.split(":")
-    if len(parts) != 3 or not parts[2].isdigit():
-        await query.edit_message_text(
-            "Не удалось распознать выбор. Запустите /feedback заново."
-        )
+    if await _handle_selection_action(query, context, draft, action, value):
         return
-    value = int(parts[2])
-    if parts[1] == "feeling":
-        option = option_by_display_value(FEELING_OPTIONS, value)
+    if draft.stage != "rating" or draft.workout is None:
+        return
+    if action == "restart":
+        await _show_feedback_options(query, context, draft, draft.workout)
+        return
+    if action == "confirm":
+        await _save_feedback(query, context, draft)
+        return
+    if not value.isdigit():
+        return
+    if action == "feeling":
+        option = option_by_display_value(FEELING_OPTIONS, int(value))
         if option is None:
             return
-        pending.feeling = option
+        draft.feeling = option
+        draft.exertion = None
         await query.edit_message_text(
             _options_text(
                 "Нагрузка",
@@ -253,124 +208,73 @@ async def _feedback_callback(
                 EXERTION_OPTIONS,
             ),
             parse_mode=ParseMode.HTML,
-            reply_markup=_options_keyboard("exertion", EXERTION_OPTIONS),
+            reply_markup=_options_keyboard(draft, "exertion", EXERTION_OPTIONS),
         )
         return
-    if parts[1] == "exertion":
-        option = option_by_display_value(EXERTION_OPTIONS, value)
+    if action == "exertion" and draft.feeling is not None:
+        option = option_by_display_value(EXERTION_OPTIONS, int(value))
         if option is None:
             return
-        pending.exertion = option
+        draft.exertion = option
         await query.edit_message_text(
-            _feedback_preview(pending),
+            _feedback_preview(draft),
             parse_mode=ParseMode.HTML,
-            reply_markup=_feedback_preview_keyboard(),
+            reply_markup=_draft_keyboard(
+                draft, [("Сохранить", "confirm"), ("Выбрать заново", "restart")]
+            ),
         )
 
 
-async def _show_feedback_options(message, context, workout: Workout) -> None:
-    context.user_data["pending_feedback"] = PendingFeedback(workout)
+async def _show_feedback_options(
+    target, context: ContextTypes.DEFAULT_TYPE, draft: FeedbackDraft, workout: Workout
+) -> None:
+    settings: Settings = context.application.bot_data["settings"]
+    today = datetime.now(settings.timezone).date()
+    draft.workout = workout
+    draft.feeling = None
+    draft.exertion = None
+    draft.stage = "rating"
     text = _options_text(
         "Самочувствие",
         f"Тренировка {workout.date:%d.%m} «{workout.title}». "
         "Как вы чувствовали себя во время тренировки? Выберите один вариант.",
         FEELING_OPTIONS,
     )
-    kwargs = {
-        "parse_mode": ParseMode.HTML,
-        "reply_markup": _options_keyboard("feeling", FEELING_OPTIONS),
-    }
-    sender = getattr(message, "reply_text", None)
-    if sender is None:
-        sender = message.edit_message_text
-    await sender(text, **kwargs)
-
-
-def _feedback_candidates(
-    workouts: list[Workout], *, today: date
-) -> list[Workout]:
-    candidates = [
-        workout
-        for workout in workouts
-        if workout.date <= today
-        and (workout.feeling_score is None or workout.exertion_score is None)
-    ]
-    yesterday = today - timedelta(days=1)
-    return sorted(
-        candidates,
-        key=lambda workout: (
-            0
-            if workout.date == today
-            else 1
-            if workout.date == yesterday
-            else 2,
-            -workout.date.toordinal(),
-            workout.sort if workout.sort is not None else 0,
-            workout.id,
+    await _send(
+        target,
+        text,
+        _options_keyboard(
+            draft,
+            "feeling",
+            FEELING_OPTIONS,
+            [("Другая тренировка", f"days:{today.isoformat()}")],
         ),
+        parse_mode=ParseMode.HTML,
     )
 
 
-def _feedback_selection_text(count: int) -> str:
-    if count % 10 == 1 and count % 100 != 11:
-        workout_word = "тренировку"
-    elif count % 10 in (2, 3, 4) and count % 100 not in (12, 13, 14):
-        workout_word = "тренировки"
-    else:
-        workout_word = "тренировок"
-    return (
-        f"Нашёл {count} {workout_word} без полного feedback.\n"
-        "К какой тренировке прикрепить отчёт?"
-    )
-
-
-def _feedback_selection_keyboard(
-    workouts: list[Workout], *, today: date
-) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(
-                    _feedback_workout_label(workout, today=today),
-                    callback_data=f"feedback:select:{workout.id}",
-                )
-            ]
-            for workout in workouts
-        ]
-        + [[InlineKeyboardButton("Отмена", callback_data="feedback:cancel")]]
-    )
-
-
-def _feedback_workout_label(workout: Workout, *, today: date) -> str:
-    if workout.date == today:
-        day = "Сегодня"
-    elif workout.date == today - timedelta(days=1):
-        day = "Вчера"
-    else:
-        day = f"{workout.date:%d.%m}"
-    return f"{day} · {workout.title}"
-
-
-async def _save_feedback(query, context, pending: PendingFeedback) -> None:
-    if pending.feeling is None or pending.exertion is None:
-        await query.edit_message_text(
-            "Выбор не завершён. Запустите /feedback заново."
-        )
+async def _save_feedback(query, context, draft: FeedbackDraft) -> None:
+    if draft.feeling is None or draft.exertion is None:
         return
+    draft.stage = "saving"
     client: TrainingEnduranceClient = context.application.bot_data["training_client"]
     try:
         await client.update_feedback(
-            pending.workout,
-            feeling_score=pending.feeling.api_value,
-            exertion_score=pending.exertion.api_value,
+            draft.workout,
+            feeling_score=draft.feeling.api_value,
+            exertion_score=draft.exertion.api_value,
         )
     except TrainingEnduranceError:
+        draft.stage = "rating"
         await query.edit_message_text(
             "Не удалось сохранить оценку. Проверьте сессию и повторите попытку.",
-            reply_markup=_feedback_preview_keyboard(),
+            reply_markup=_draft_keyboard(
+                draft, [("Сохранить", "confirm"), ("Выбрать заново", "restart")]
+            ),
         )
         return
-    context.user_data.pop("pending_feedback", None)
+    if context.user_data.get("feedback_draft") is draft:
+        context.user_data.pop("feedback_draft")
     await query.edit_message_text(
         "Самочувствие и нагрузка сохранены в Training Endurance."
     )
@@ -388,38 +292,30 @@ def _options_text(
 
 
 def _options_keyboard(
-    kind: str, options: tuple[FeedbackOption, ...]
+    draft: FeedbackDraft,
+    kind: str,
+    options: tuple[FeedbackOption, ...],
+    extra: list[tuple[str, str]] | None = None,
 ) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
+    return _draft_keyboard(
+        draft,
         [
-            [
-                InlineKeyboardButton(
-                    f"{option.display_value} · {option.name}",
-                    callback_data=f"feedback:{kind}:{option.display_value}",
-                )
-            ]
+            (f"{option.display_value} · {option.name}", f"{kind}:{option.display_value}")
             for option in options
         ]
-        + [[InlineKeyboardButton("Отмена", callback_data="feedback:cancel")]]
+        + (extra or []),
     )
 
 
-def _feedback_preview(pending: PendingFeedback) -> str:
-    feeling = pending.feeling
-    exertion = pending.exertion
-    if feeling is None or exertion is None:
-        return "Выбор не завершён."
+def _feedback_preview(draft: FeedbackDraft) -> str:
+    feeling = draft.feeling
+    exertion = draft.exertion
+    workout = draft.workout
     warning = ""
-    existing_feeling = option_by_api_value(
-        FEELING_OPTIONS, pending.workout.feeling_score
-    )
-    existing_exertion = option_by_api_value(
-        EXERTION_OPTIONS, pending.workout.exertion_score
-    )
-    if existing_feeling is not None or existing_exertion is not None:
+    if _has_feedback(workout):
         warning = "\n\n⚠️ Существующая оценка тренировки будет заменена."
     return (
-        f"<b>Тренировка «{escape(pending.workout.title)}»</b>\n\n"
+        f"<b>Тренировка {workout.date:%d.%m.%Y} «{escape(workout.title)}»</b>\n\n"
         f"<b>Самочувствие: {feeling.display_value} — {escape(feeling.name)}</b>\n"
         f"{escape(feeling.description)}\n\n"
         f"<b>Нагрузка: {exertion.display_value} — {escape(exertion.name)}</b>\n"
@@ -428,14 +324,8 @@ def _feedback_preview(pending: PendingFeedback) -> str:
     )
 
 
-def _feedback_preview_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("Сохранить", callback_data="feedback:confirm")],
-            [InlineKeyboardButton("Выбрать заново", callback_data="feedback:restart")],
-            [InlineKeyboardButton("Отмена", callback_data="feedback:cancel")],
-        ]
-    )
+def _has_feedback(workout: Workout) -> bool:
+    return workout.feeling_score is not None or workout.exertion_score is not None
 
 
 async def _send_period(
@@ -484,7 +374,7 @@ async def _comment_coros(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         activity.report,
         source=f"отчёт COROS «{activity.title}» от {activity.date:%d.%m.%Y}",
     )
-    await _offer_comment_workouts(
+    await _offer_workouts(
         message, context, draft, [activity.date], other_days=True, auto_select=True
     )
 
@@ -496,8 +386,8 @@ async def _prepare_comment(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     settings: Settings = context.application.bot_data["settings"]
     draft = _start_comment_draft(context, " ".join(context.args or ()) or None)
     end = datetime.now(settings.timezone).date()
-    await _offer_comment_workouts(
-        message, context, draft, _comment_window(end), auto_select=True
+    await _offer_workouts(
+        message, context, draft, _workout_window(end), auto_select=True
     )
 
 
@@ -509,14 +399,14 @@ def _start_comment_draft(
     return draft
 
 
-def _comment_window(end: date) -> list[date]:
-    return [end - timedelta(days=offset) for offset in range(COMMENT_WINDOW_DAYS - 1, -1, -1)]
+def _workout_window(end: date) -> list[date]:
+    return [end - timedelta(days=offset) for offset in range(WORKOUT_WINDOW_DAYS - 1, -1, -1)]
 
 
-async def _offer_comment_workouts(
+async def _offer_workouts(
     target,
     context: ContextTypes.DEFAULT_TYPE,
-    draft: CommentDraft,
+    draft: CommentDraft | FeedbackDraft,
     dates: list[date],
     *,
     other_days: bool = False,
@@ -535,8 +425,12 @@ async def _offer_comment_workouts(
         await _send(
             target,
             "Не удалось получить тренировки Training Endurance. "
-            "Текст отчёта сохранён, повторите выбор.",
-            _comment_keyboard(
+            + (
+                "Текст отчёта сохранён, повторите выбор."
+                if isinstance(draft, CommentDraft)
+                else "Повторите выбор."
+            ),
+            _draft_keyboard(
                 draft,
                 [
                     (
@@ -559,11 +453,11 @@ async def _offer_comment_workouts(
     )
     draft.candidates = {workout.id: workout for workout in candidates}
     if auto_select and len(candidates) == 1:
-        await _select_comment_workout(target, context, draft, candidates[0])
+        await _select_workout(target, context, draft, candidates[0])
         return
     if other_days and not candidates:
-        await _offer_comment_workouts(
-            target, context, draft, _comment_window(today), auto_select=auto_select
+        await _offer_workouts(
+            target, context, draft, _workout_window(today), auto_select=auto_select
         )
         return
     period = (
@@ -577,15 +471,20 @@ async def _offer_comment_workouts(
         else ("← Ранее", f"days:{(dates[0] - timedelta(days=1)).isoformat()}")
     )
     buttons = [
-        (_comment_workout_label(workout, today=today), f"pick:{workout.id}")
+        (_workout_label(draft, workout, today=today), f"pick:{workout.id}")
         for workout in candidates
     ]
-    text = (
+    question = (
         f"К какой тренировке за {period} прикрепить отчёт?"
+        if isinstance(draft, CommentDraft)
+        else f"Какую тренировку за {period} оценить?"
+    )
+    text = (
+        question
         if candidates
         else f"За {period} тренировок нет."
     )
-    await _send(target, text, _comment_keyboard(draft, buttons + [navigation]))
+    await _send(target, text, _draft_keyboard(draft, buttons + [navigation]))
 
 
 async def _select_comment_workout(
@@ -601,6 +500,47 @@ async def _select_comment_workout(
         )
         return
     await _show_comment_preview(target, context, draft)
+
+
+async def _select_workout(
+    target,
+    context: ContextTypes.DEFAULT_TYPE,
+    draft: CommentDraft | FeedbackDraft,
+    workout: Workout,
+) -> None:
+    if isinstance(draft, CommentDraft):
+        await _select_comment_workout(target, context, draft, workout)
+    else:
+        await _show_feedback_options(target, context, draft, workout)
+
+
+async def _handle_selection_action(
+    query,
+    context: ContextTypes.DEFAULT_TYPE,
+    draft: CommentDraft | FeedbackDraft,
+    action: str,
+    value: str,
+) -> bool:
+    """Обрабатывает общие кнопки выбора тренировки; повтор в текущем диалоге игнорируется."""
+    if action == "pick":
+        if draft.stage == "select" and value in draft.candidates:
+            await _select_workout(query, context, draft, draft.candidates[value])
+        return True
+    if action not in ("days", "date"):
+        return False
+    settings: Settings = context.application.bot_data["settings"]
+    try:
+        day = date.fromisoformat(value)
+    except ValueError:
+        return True
+    if day > datetime.now(settings.timezone).date():
+        return True
+    draft.workout = None
+    if action == "days":
+        await _offer_workouts(query, context, draft, _workout_window(day))
+    else:
+        await _offer_workouts(query, context, draft, [day], other_days=True)
+    return True
 
 
 async def _comment_callback(
@@ -626,45 +566,40 @@ async def _comment_callback(
         context.user_data.pop("comment_draft", None)
         await query.edit_message_text("Подготовка отчёта отменена.")
         return
-    if action == "pick":
-        if draft.stage == "select" and value in draft.candidates:
-            await _select_comment_workout(query, context, draft, draft.candidates[value])
-        return
-    if action not in ("days", "date"):
-        return
-    settings: Settings = context.application.bot_data["settings"]
-    try:
-        day = date.fromisoformat(value)
-    except ValueError:
-        return
-    if day > datetime.now(settings.timezone).date():
-        return
-    draft.workout = None
-    if action == "days":
-        await _offer_comment_workouts(query, context, draft, _comment_window(day))
-    else:
-        await _offer_comment_workouts(query, context, draft, [day], other_days=True)
+    await _handle_selection_action(query, context, draft, action, value)
 
 
-def _comment_keyboard(
-    draft: CommentDraft, buttons: list[tuple[str, str]]
+def _draft_keyboard(
+    draft: CommentDraft | FeedbackDraft, buttons: list[tuple[str, str]]
 ) -> InlineKeyboardMarkup:
+    prefix = "comment" if isinstance(draft, CommentDraft) else "feedback"
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton(label, callback_data=f"comment:{draft.token}:{action}")]
+            [InlineKeyboardButton(label, callback_data=f"{prefix}:{draft.token}:{action}")]
             for label, action in buttons + [("Отмена", "cancel")]
         ]
     )
 
 
-def _comment_workout_label(workout: Workout, *, today: date) -> str:
-    label = _feedback_workout_label(workout, today=today)
-    return f"{label} · есть отчёт" if workout.post_activity_comment else label
+def _workout_label(
+    draft: CommentDraft | FeedbackDraft, workout: Workout, *, today: date
+) -> str:
+    if workout.date == today:
+        label = f"Сегодня · {workout.title}"
+    elif workout.date == today - timedelta(days=1):
+        label = f"Вчера · {workout.title}"
+    else:
+        label = f"{workout.date:%d.%m} · {workout.title}"
+    if isinstance(draft, CommentDraft) and workout.post_activity_comment:
+        return f"{label} · есть отчёт"
+    if isinstance(draft, FeedbackDraft) and _has_feedback(workout):
+        return f"{label} · есть оценка"
+    return label
 
 
-async def _send(target, text: str, reply_markup=None) -> None:
+async def _send(target, text: str, reply_markup=None, **kwargs) -> None:
     sender = getattr(target, "reply_text", None) or target.edit_message_text
-    await sender(text, reply_markup=reply_markup)
+    await sender(text, reply_markup=reply_markup, **kwargs)
 
 
 async def _show_comment_preview(
@@ -682,7 +617,7 @@ async def _show_comment_preview(
     await _send(
         target,
         "\n".join(lines) + f"\n\n{draft.text}\n\n/confirm, /cancel или /edit",
-        _comment_keyboard(draft, [("Другая тренировка", f"days:{today.isoformat()}")]),
+        _draft_keyboard(draft, [("Другая тренировка", f"days:{today.isoformat()}")]),
     )
 
 
@@ -715,7 +650,7 @@ async def _confirm_comment(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 async def _cancel_comment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data.pop("comment_draft", None)
-    context.user_data.pop("pending_feedback", None)
+    context.user_data.pop("feedback_draft", None)
     if update.effective_message:
         await update.effective_message.reply_text("Подготовленное действие отменено.")
 
