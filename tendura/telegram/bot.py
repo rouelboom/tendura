@@ -51,15 +51,6 @@ BOT_COMMANDS = (
     BotCommand("confirm", "Подтвердить подготовленный отчёт"),
     BotCommand("cancel", "Отменить подготовленный отчёт"),
     BotCommand("edit", "Изменить подготовленный отчёт"),
-    BotCommand("t", "Коротко: сегодня"),
-    BotCommand("tm", "Коротко: завтра"),
-    BotCommand("w", "Коротко: неделя"),
-    BotCommand("f", "Коротко: самочувствие и нагрузка"),
-    BotCommand("cc", "Коротко: отчёт COROS"),
-    BotCommand("c", "Коротко: подготовить отчёт"),
-    BotCommand("ok", "Коротко: подтвердить"),
-    BotCommand("x", "Коротко: отменить"),
-    BotCommand("e", "Коротко: изменить"),
 )
 
 COMMENT_WINDOW_DAYS = 7
