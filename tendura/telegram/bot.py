@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import secrets
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from html import escape
+from typing import Literal
 
 from httpx import Limits
-from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
+from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
 from telegram.ext import (
     Application,
@@ -60,12 +62,24 @@ BOT_COMMANDS = (
     BotCommand("e", "Коротко: изменить"),
 )
 
+COMMENT_WINDOW_DAYS = 7
+
 
 @dataclass
 class PendingFeedback:
     workout: Workout
     feeling: FeedbackOption | None = None
     exertion: FeedbackOption | None = None
+
+
+@dataclass
+class CommentDraft:
+    token: str
+    text: str | None
+    source: str | None = None
+    candidates: dict[str, Workout] = field(default_factory=dict)
+    workout: Workout | None = None
+    stage: Literal["select", "text", "preview", "saving"] = "select"
 
 
 def build_application(settings: Settings) -> Application:
@@ -114,7 +128,10 @@ def build_application(settings: Settings) -> Application:
     application.add_handler(CommandHandler(("cancel", "x"), _cancel_comment))
     application.add_handler(CommandHandler(("edit", "e"), _edit_comment))
     application.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, _receive_comment_edit)
+        CallbackQueryHandler(_comment_callback, pattern=r"^comment:")
+    )
+    application.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, _receive_comment_text)
     )
     schedule_daily_notifications(application)
     return application
@@ -456,8 +473,9 @@ async def _comment_coros(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     message = update.effective_message
     settings: Settings = context.application.bot_data["settings"]
     client: CorosClient = context.application.bot_data["coros_client"]
+    today = datetime.now(settings.timezone).date()
     try:
-        activity = await client.latest_activity(today=datetime.now(settings.timezone).date())
+        activity = await client.latest_activity(today=today)
     except CorosError:
         await message.reply_text(
             "Не удалось получить отчёт из COROS. Повторите позже или переподключите COROS."
@@ -469,54 +487,195 @@ async def _comment_coros(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if activity.report is None:
         await message.reply_text("Для этой тренировки голосовой отчёт в COROS не найден.")
         return
-    training_client: TrainingEnduranceClient = context.application.bot_data[
-        "training_client"
-    ]
-    try:
-        workouts = await training_client.workouts(
-            user_id=settings.training_endurance_user_id or "", dates=[activity.date]
-        )
-    except TrainingEnduranceError:
-        await message.reply_text(
-            "Не удалось получить тренировку Training Endurance. Проверьте сессию."
-        )
-        return
-    if len(workouts) != 1:
-        await message.reply_text(
-            f"Для отчёта нужна ровно одна тренировка {activity.date:%d.%m}."
-        )
-        return
-    await _show_comment_preview(message, context, workouts[0], activity.report)
+    draft = _start_comment_draft(
+        context,
+        activity.report,
+        source=f"отчёт COROS «{activity.title}» от {activity.date:%d.%m.%Y}",
+    )
+    await _offer_comment_workouts(
+        message, context, draft, [activity.date], other_days=True
+    )
 
 
 async def _prepare_comment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await _allowed(update, context):
         return
     message = update.effective_message
-    if message is None or not context.args:
-        await message.reply_text("Используйте: /comment ваш текст отчёта")
-        return
+    settings: Settings = context.application.bot_data["settings"]
+    draft = _start_comment_draft(context, " ".join(context.args or ()) or None)
+    end = datetime.now(settings.timezone).date()
+    await _offer_comment_workouts(message, context, draft, _comment_window(end))
+
+
+def _start_comment_draft(
+    context: ContextTypes.DEFAULT_TYPE, text: str | None, *, source: str | None = None
+) -> CommentDraft:
+    draft = CommentDraft(secrets.token_hex(4), text, source)
+    context.user_data["comment_draft"] = draft
+    return draft
+
+
+def _comment_window(end: date) -> list[date]:
+    return [end - timedelta(days=offset) for offset in range(COMMENT_WINDOW_DAYS - 1, -1, -1)]
+
+
+async def _offer_comment_workouts(
+    target,
+    context: ContextTypes.DEFAULT_TYPE,
+    draft: CommentDraft,
+    dates: list[date],
+    *,
+    other_days: bool = False,
+) -> None:
     settings: Settings = context.application.bot_data["settings"]
     client: TrainingEnduranceClient = context.application.bot_data["training_client"]
-    workouts = await client.workouts(user_id=settings.training_endurance_user_id or "", dates=[date.today()])
-    if len(workouts) != 1:
-        await message.reply_text("Для отчёта нужна ровно одна тренировка на сегодня.")
+    today = datetime.now(settings.timezone).date()
+    draft.stage = "select"
+    draft.candidates = {}
+    try:
+        workouts = await client.workouts(
+            user_id=settings.training_endurance_user_id or "", dates=dates
+        )
+    except TrainingEnduranceError:
+        await _send(
+            target,
+            "Не удалось получить тренировки Training Endurance. "
+            "Текст отчёта сохранён, повторите выбор.",
+            _comment_keyboard(draft, [("Повторить", f"days:{dates[-1].isoformat()}")]),
+        )
         return
-    await _show_comment_preview(message, context, workouts[0], " ".join(context.args))
+    candidates = sorted(
+        (workout for workout in workouts if workout.date <= today),
+        key=lambda workout: (
+            -workout.date.toordinal(),
+            workout.sort if workout.sort is not None else 0,
+            workout.id,
+        ),
+    )
+    draft.candidates = {workout.id: workout for workout in candidates}
+    if len(candidates) == 1:
+        await _select_comment_workout(target, context, draft, candidates[0])
+        return
+    if other_days and not candidates:
+        await _offer_comment_workouts(target, context, draft, _comment_window(today))
+        return
+    period = (
+        f"{dates[0]:%d.%m}"
+        if len(dates) == 1
+        else f"{dates[0]:%d.%m}–{dates[-1]:%d.%m}"
+    )
+    navigation = (
+        ("Другие дни", f"days:{today.isoformat()}")
+        if other_days
+        else ("← Ранее", f"days:{(dates[0] - timedelta(days=1)).isoformat()}")
+    )
+    buttons = [
+        (_comment_workout_label(workout, today=today), f"pick:{workout.id}")
+        for workout in candidates
+    ]
+    text = (
+        f"К какой тренировке за {period} прикрепить отчёт?"
+        if candidates
+        else f"За {period} тренировок нет."
+    )
+    await _send(target, text, _comment_keyboard(draft, buttons + [navigation]))
+
+
+async def _select_comment_workout(
+    target, context: ContextTypes.DEFAULT_TYPE, draft: CommentDraft, workout: Workout
+) -> None:
+    draft.workout = workout
+    if draft.text is None:
+        draft.stage = "text"
+        await _send(
+            target,
+            f"Тренировка {workout.date:%d.%m.%Y} «{workout.title}». "
+            "Отправьте текст отчёта обычным сообщением.",
+        )
+        return
+    await _show_comment_preview(target, context, draft)
+
+
+async def _comment_callback(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    query = update.callback_query
+    if query is None:
+        return
+    await query.answer()
+    if not await _allowed(update, context):
+        return
+    _, token, action, value = ((query.data or "").split(":", 3) + ["", "", ""])[:4]
+    draft = context.user_data.get("comment_draft")
+    if (
+        not isinstance(draft, CommentDraft)
+        or draft.token != token
+        or draft.stage == "saving"
+    ):
+        await query.edit_message_text(
+            "Этот выбор уже неактуален. Запустите /comment или /comment_coros заново."
+        )
+        return
+    if action == "cancel":
+        context.user_data.pop("comment_draft", None)
+        await query.edit_message_text("Подготовка отчёта отменена.")
+        return
+    if action == "pick" and draft.stage == "select" and value in draft.candidates:
+        await _select_comment_workout(query, context, draft, draft.candidates[value])
+        return
+    if action == "days":
+        settings: Settings = context.application.bot_data["settings"]
+        today = datetime.now(settings.timezone).date()
+        try:
+            end = date.fromisoformat(value)
+        except ValueError:
+            end = None
+        if end is not None and end <= today:
+            draft.workout = None
+            await _offer_comment_workouts(query, context, draft, _comment_window(end))
+            return
+    await query.edit_message_text(
+        "Этот выбор уже неактуален. Запустите /comment или /comment_coros заново."
+    )
+
+
+def _comment_keyboard(
+    draft: CommentDraft, buttons: list[tuple[str, str]]
+) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton(label, callback_data=f"comment:{draft.token}:{action}")]
+            for label, action in buttons + [("Отмена", "cancel")]
+        ]
+    )
+
+
+def _comment_workout_label(workout: Workout, *, today: date) -> str:
+    label = _feedback_workout_label(workout, today=today)
+    return f"{label} · есть отчёт" if workout.post_activity_comment else label
+
+
+async def _send(target, text: str, reply_markup=None) -> None:
+    sender = getattr(target, "reply_text", None) or target.edit_message_text
+    await sender(text, reply_markup=reply_markup)
 
 
 async def _show_comment_preview(
-    message: Message,
-    context: ContextTypes.DEFAULT_TYPE,
-    workout: Workout,
-    comment: str,
+    target, context: ContextTypes.DEFAULT_TYPE, draft: CommentDraft
 ) -> None:
-    context.user_data["pending_comment"] = (workout, comment)
-    context.user_data.pop("awaiting_comment_edit", None)
-    warning = "\nСуществующий отчёт будет перезаписан." if workout.post_activity_comment else ""
-    await message.reply_text(
-        f"Отправить отчёт к тренировке «{workout.title}»?{warning}"
-        f"\n\n{comment}\n\n/confirm, /cancel или /edit"
+    settings: Settings = context.application.bot_data["settings"]
+    today = datetime.now(settings.timezone).date()
+    workout = draft.workout
+    draft.stage = "preview"
+    lines = [f"Отправить отчёт к тренировке {workout.date:%d.%m.%Y} «{workout.title}»?"]
+    if draft.source:
+        lines.append(f"Источник: {draft.source}.")
+    if workout.post_activity_comment:
+        lines.append("Существующий отчёт будет перезаписан.")
+    await _send(
+        target,
+        "\n".join(lines) + f"\n\n{draft.text}\n\n/confirm, /cancel или /edit",
+        _comment_keyboard(draft, [("Другая тренировка", f"days:{today.isoformat()}")]),
     )
 
 
@@ -524,24 +683,31 @@ async def _confirm_comment(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if not await _allowed(update, context):
         return
     message = update.effective_message
-    context.user_data.pop("awaiting_comment_edit", None)
-    pending = context.user_data.pop("pending_comment", None)
-    if pending is None:
+    draft = context.user_data.get("comment_draft")
+    if not isinstance(draft, CommentDraft) or draft.stage != "preview":
         await message.reply_text("Нет подготовленного отчёта.")
         return
-    workout, comment = pending
+    workout = draft.workout
+    if workout is None or draft.candidates.get(workout.id) != workout or not draft.text:
+        await message.reply_text("Выбранная тренировка неактуальна. Подготовьте отчёт заново.")
+        return
+    draft.stage = "saving"
     client: TrainingEnduranceClient = context.application.bot_data["training_client"]
     try:
-        await client.update_comment(workout, comment)
+        await client.update_comment(workout, draft.text)
     except TrainingEnduranceError:
-        await message.reply_text("Не удалось сохранить отчёт. Проверьте сессию и повторите попытку.")
+        draft.stage = "preview"
+        await message.reply_text(
+            "Не удалось сохранить отчёт. Проверьте сессию и повторите /confirm или /cancel."
+        )
         return
+    if context.user_data.get("comment_draft") is draft:
+        context.user_data.pop("comment_draft")
     await message.reply_text("Отчёт спортсмена сохранён.")
 
 
 async def _cancel_comment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    context.user_data.pop("pending_comment", None)
-    context.user_data.pop("awaiting_comment_edit", None)
+    context.user_data.pop("comment_draft", None)
     context.user_data.pop("pending_feedback", None)
     if update.effective_message:
         await update.effective_message.reply_text("Подготовленное действие отменено.")
@@ -551,26 +717,27 @@ async def _edit_comment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if not await _allowed(update, context):
         return
     message = update.effective_message
-    if context.user_data.get("pending_comment") is None:
+    draft = context.user_data.get("comment_draft")
+    if not isinstance(draft, CommentDraft) or draft.stage not in ("preview", "text"):
         await message.reply_text("Нет подготовленного отчёта для редактирования.")
         return
-    context.user_data["awaiting_comment_edit"] = True
+    draft.stage = "text"
     await message.reply_text("Отправьте новый текст отчёта обычным сообщением.")
 
 
-async def _receive_comment_edit(
+async def _receive_comment_text(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
-    if not context.user_data.get("awaiting_comment_edit"):
+    draft = context.user_data.get("comment_draft")
+    if not isinstance(draft, CommentDraft) or draft.stage != "text":
         return
     if not await _allowed(update, context):
         return
     message = update.effective_message
-    pending = context.user_data.get("pending_comment")
-    if message is None or message.text is None or pending is None:
+    if message is None or not message.text:
         return
-    workout, _ = pending
-    await _show_comment_preview(message, context, workout, message.text)
+    draft.text = message.text
+    await _show_comment_preview(message, context, draft)
 
 
 async def _allowed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
