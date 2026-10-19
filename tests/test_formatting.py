@@ -17,9 +17,9 @@ class FormattingTest(unittest.TestCase):
         self.assertIn("<b>21.07 — Кросс</b>", text)
         self.assertIn("Длительность: 1:05", text)
         self.assertIn("Дистанция: 10 км", text)
-        self.assertIn("Тип: Бег", text)
-        self.assertIn("Метод расчёта: По пульсу", text)
-        self.assertIn("Зоны: 5", text)
+        self.assertNotIn("Тип:", text)
+        self.assertNotIn("Метод расчёта:", text)
+        self.assertNotIn("Зоны:", text)
         self.assertIn("Комментарий перед тренировкой", text)
 
     def test_escapes_html_from_training_data(self) -> None:

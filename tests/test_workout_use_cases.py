@@ -95,24 +95,24 @@ class GetWorkoutsTest(unittest.IsolatedAsyncioTestCase):
             post_activity_comment=None,
             sort=1,
         )
-        self.reader.workouts.return_value = [workout]
+        self.reader.calendar_entries.return_value = [workout]
 
         result = await self.use_case.execute(self.dates)
 
         self.assertEqual([workout], result)
-        self.reader.workouts.assert_awaited_once_with(
+        self.reader.calendar_entries.assert_awaited_once_with(
             user_id="athlete-1", dates=self.dates
         )
 
     async def test_returns_empty_calendar(self) -> None:
-        self.reader.workouts.return_value = []
+        self.reader.calendar_entries.return_value = []
 
         result = await self.use_case.execute(self.dates)
 
         self.assertEqual([], result)
 
     async def test_preserves_provider_error(self) -> None:
-        self.reader.workouts.side_effect = TrainingEnduranceError("недоступен")
+        self.reader.calendar_entries.side_effect = TrainingEnduranceError("недоступен")
 
         with self.assertRaises(TrainingEnduranceError):
             await self.use_case.execute(self.dates)
@@ -121,4 +121,4 @@ class GetWorkoutsTest(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             await self.use_case.execute([])
 
-        self.reader.workouts.assert_not_awaited()
+        self.reader.calendar_entries.assert_not_awaited()

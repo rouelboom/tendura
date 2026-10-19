@@ -8,7 +8,7 @@ from datetime import date, timedelta
 from enum import Enum
 from typing import Protocol
 
-from tendura.core.models import Workout
+from tendura.core.models import CalendarEntry
 
 
 class WorkoutPeriod(str, Enum):
@@ -18,9 +18,9 @@ class WorkoutPeriod(str, Enum):
 
 
 class WorkoutReader(Protocol):
-    async def workouts(
+    async def calendar_entries(
         self, *, user_id: str, dates: Sequence[date]
-    ) -> list[Workout]: ...
+    ) -> list[CalendarEntry]: ...
 
 
 @dataclass(frozen=True)
@@ -28,10 +28,10 @@ class GetWorkouts:
     reader: WorkoutReader
     user_id: str
 
-    async def execute(self, dates: Sequence[date]) -> list[Workout]:
+    async def execute(self, dates: Sequence[date]) -> list[CalendarEntry]:
         if not dates:
             raise ValueError("Диапазон тренировок не может быть пустым")
-        return await self.reader.workouts(user_id=self.user_id, dates=dates)
+        return await self.reader.calendar_entries(user_id=self.user_id, dates=dates)
 
 
 def dates_for_period(period: WorkoutPeriod, *, today: date) -> list[date]:

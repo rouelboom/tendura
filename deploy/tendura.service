@@ -2,6 +2,8 @@
 Description=Tendura Telegram bot
 After=network-online.target
 Wants=network-online.target
+Requires=xray-tendura.service
+After=xray-tendura.service
 
 [Service]
 Type=simple
@@ -10,6 +12,10 @@ EnvironmentFile=/etc/tendura/tendura.env
 ExecStart=/opt/tendura/.venv/bin/python -m tendura
 Restart=on-failure
 RestartSec=5
+WatchdogSec=120
+WatchdogSignal=SIGTERM
+NotifyAccess=main
+TimeoutStopSec=15
 
 [Install]
 WantedBy=multi-user.target

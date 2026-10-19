@@ -8,7 +8,7 @@ from typing import Any
 
 import httpx
 
-from tendura.core.models import Workout
+from tendura.core.models import CalendarActivity, CalendarEntry, Workout
 
 
 GRAPHQL_URL = "https://app.trainingendurance.com/graphql"
@@ -38,6 +38,15 @@ query TenduraCalendarItems($request: CalendarItemsRequest!) {
             distanceInMeters
           }
         }
+        ... on Rest {
+          name
+          description
+        }
+        ... on Event {
+          name
+          description
+          comment
+        }
       }
     }
   }
@@ -62,6 +71,12 @@ class TrainingEnduranceClient:
         self._client = client
 
     async def workouts(self, *, user_id: str, dates: Sequence[date]) -> list[Workout]:
+        entries = await self.calendar_entries(user_id=user_id, dates=dates)
+        return [entry for entry in entries if isinstance(entry, Workout)]
+
+    async def calendar_entries(
+        self, *, user_id: str, dates: Sequence[date]
+    ) -> list[CalendarEntry]:
         payload = {
             "query": CALENDAR_ITEMS_QUERY,
             "variables": {
@@ -73,7 +88,7 @@ class TrainingEnduranceClient:
         else:
             async with httpx.AsyncClient(timeout=20, trust_env=False) as client:
                 response = await self._post(client, payload)
-        return workouts_from_response(response, user_id=user_id)
+        return calendar_entries_from_response(response, user_id=user_id)
 
     async def update_comment(self, workout: Workout, comment: str) -> None:
         response = await self._update_workout(
@@ -162,6 +177,13 @@ class TrainingEnduranceClient:
 
 
 def workouts_from_response(response: Mapping[str, Any], *, user_id: str) -> list[Workout]:
+    entries = calendar_entries_from_response(response, user_id=user_id)
+    return [entry for entry in entries if isinstance(entry, Workout)]
+
+
+def calendar_entries_from_response(
+    response: Mapping[str, Any], *, user_id: str
+) -> list[CalendarEntry]:
     try:
         records = response["data"]["calendarItems"]["records"]
     except (KeyError, TypeError) as error:
@@ -169,12 +191,38 @@ def workouts_from_response(response: Mapping[str, Any], *, user_id: str) -> list
     if not isinstance(records, list):
         raise TrainingEnduranceError("calendarItems.records должен быть списком")
 
-    workouts = []
+    entries = []
     for record in records:
-        workout = _workout_from_record(record, user_id=user_id)
-        if workout is not None:
-            workouts.append(workout)
-    return sorted(workouts, key=lambda item: (item.date, item.sort or 0))
+        if isinstance(record, Mapping) and record.get("type") in ("EVENT", "REST"):
+            entry = _activity_from_record(record, user_id=user_id)
+        else:
+            entry = _workout_from_record(record, user_id=user_id)
+        if entry is not None:
+            entries.append(entry)
+    return sorted(entries, key=lambda item: (item.date, item.sort or 0))
+
+
+def _activity_from_record(
+    record: Mapping[str, Any], *, user_id: str
+) -> CalendarActivity | None:
+    kind = record["type"]
+    data = record.get("data")
+    typename = "Rest" if kind == "REST" else "Event"
+    if not isinstance(data, Mapping) or data.get("__typename") != typename:
+        return None
+    record_id, raw_date = record.get("id"), record.get("date")
+    if not isinstance(record_id, str) or not isinstance(raw_date, str):
+        raise TrainingEnduranceError("Запись календаря не содержит id или дату")
+    return CalendarActivity(
+        id=record_id,
+        date=date.fromisoformat(raw_date[:10]),
+        user_id=_text(record, "userID") or user_id,
+        title=_text(data, "name") or ("День отдыха" if kind == "REST" else "Активность"),
+        kind=kind,
+        description=_text(data, "description"),
+        comment=_text(data, "comment") if kind == "EVENT" else None,
+        sort=_integer(record, "sort"),
+    )
 
 
 def _workout_from_record(record: Any, *, user_id: str) -> Workout | None:
