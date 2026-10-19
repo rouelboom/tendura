@@ -1,0 +1,48 @@
+name: Deploy Tendura
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tendura-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Получить код
+        uses: actions/checkout@v4
+
+      - name: Установить uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Установить зависимости
+        run: UV_PROJECT_ENVIRONMENT=.venv uv sync --locked --python 3.13 --no-dev
+
+      - name: Запустить тесты
+        run: .venv/bin/python -m unittest discover -s tests
+
+      - name: Настроить SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.TENDURA_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.TENDURA_SSH_KNOWN_HOSTS }}
+        run: |
+          test -n "$SSH_PRIVATE_KEY"
+          test -n "$SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+
+      - name: Задеплоить бота
+        env:
+          TENDURA_SERVER_HOST: ${{ secrets.TENDURA_SERVER_HOST }}
+        run: deploy/deploy.sh "$GITHUB_WORKSPACE"

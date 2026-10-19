@@ -16,7 +16,7 @@ set -a; source .env; set +a
 .venv/bin/python -m tendura
 ```
 
-Отправьте `/start` (или `/menu`), чтобы включить постоянное меню кнопками: «Сегодня», «Завтра», «Неделя», «Оценить тренировку», «Отчёт из COROS» и «Написать отчёт». Кнопки запускают те же сценарии, что и команды; предварительный просмотр отчёта подтверждается кнопкой «Отправить» и редактируется кнопкой «Изменить».
+Отправьте `/start` (или `/menu`), чтобы включить постоянное меню кнопками: «Сегодня», «Завтра», «Неделя», «Самочувствие и нагрузка», «Отчёт из COROS» и «Написать отчёт». Кнопки запускают те же сценарии, что и команды; предварительный просмотр отчёта подтверждается кнопкой «Отправить» и редактируется кнопкой «Изменить».
 
 Команды по-прежнему доступны через `/` в Telegram. Основные команды:
 
@@ -36,6 +36,10 @@ set -a; source .env; set +a
 Не добавляйте `.env`, токен Telegram, cookie Training Endurance и `data/coros-oauth.json` в Git. Для cookie используйте полный заголовок `Cookie` успешного запроса Training Endurance, содержащий `ory_kratos_session`. OAuth-файл COROS должен иметь права `600`; его путь задаётся через `TENDURA_COROS_OAUTH_FILE`.
 
 ## Развёртывание
+
+Push в `main` запускает GitHub Actions (`.github/workflows/deploy.yml`): тесты, затем `deploy/deploy.sh`. Скрипт делает резервную копию пакета `tendura/` из `/opt/tendura` и `/opt/tendura-alice` в `/opt/tendura-backups` (хранятся 10 последних `release-*`), синхронизирует код через `rsync --delete`, перезапускает `tendura.service` и `tendura-alice.service` и проверяет, что через 15 секунд они активны, не перезапускались после падения, а Алиса отвечает на `/healthz`. При ошибке код восстанавливается из резервной копии. Тот же деплой можно запустить вручную на вкладке Actions или локально: `TENDURA_SERVER_HOST=<адрес> deploy/deploy.sh`.
+
+Нужные секреты репозитория: `TENDURA_SERVER_HOST`, `TENDURA_SSH_PRIVATE_KEY`, `TENDURA_SSH_KNOWN_HOSTS`. Скрипт обновляет только код: `data/`, `.venv`, `/etc/tendura` и unit-файлы не меняются. При изменении зависимостей (`pyproject.toml`, `uv.lock`) или unit-файлов обновите их на сервере вручную до деплоя.
 
 Сервис использует `/opt/tendura`, конфигурацию `/etc/tendura/tendura.env`, OAuth-файл `/etc/tendura/coros-oauth.json` с правами `600` и unit-файл `deploy/tendura.service`.
 Для доступа бота к Telegram через локальный Xray задайте `TENDURA_TELEGRAM_PROXY=http://127.0.0.1:8080`. Настройка применяется к отправке запросов и получению обновлений Telegram; клиент Training Endurance работает напрямую. Xray запускается отдельным `deploy/xray-tendura.service`, а конфигурация с ключами хранится только на сервере в `/etc/xray/config.json`.
