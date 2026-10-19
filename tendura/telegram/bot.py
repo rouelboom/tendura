@@ -74,7 +74,7 @@ class FeedbackDraft:
     workout: Workout | None = None
     feeling: FeedbackOption | None = None
     exertion: FeedbackOption | None = None
-    stage: Literal["select", "rating", "saving"] = "select"
+    stage: Literal["select", "feeling", "exertion", "preview", "saving"] = "select"
 
 
 @dataclass
@@ -85,6 +85,7 @@ class CommentDraft:
     candidates: dict[str, Workout] = field(default_factory=dict)
     workout: Workout | None = None
     stage: Literal["select", "text", "preview", "saving"] = "select"
+    preview_version: int = 0
 
 
 def build_application(settings: Settings) -> Application:
@@ -228,22 +229,23 @@ async def _feedback_callback(
         return
     if await _handle_selection_action(query, context, draft, action, value):
         return
-    if draft.stage != "rating" or draft.workout is None:
+    if draft.workout is None:
         return
-    if action == "restart":
+    if action == "restart" and draft.stage == "preview":
         await _show_feedback_options(query, context, draft, draft.workout)
         return
-    if action == "confirm":
+    if action == "confirm" and draft.stage == "preview":
         await _save_feedback(query, context, draft)
         return
     if not value.isdigit():
         return
-    if action == "feeling":
+    if action == "feeling" and draft.stage == "feeling":
         option = option_by_display_value(FEELING_OPTIONS, int(value))
         if option is None:
             return
         draft.feeling = option
         draft.exertion = None
+        draft.stage = "exertion"
         await query.edit_message_text(
             _options_text(
                 "Нагрузка",
@@ -254,11 +256,12 @@ async def _feedback_callback(
             reply_markup=_options_keyboard(draft, "exertion", EXERTION_OPTIONS),
         )
         return
-    if action == "exertion" and draft.feeling is not None:
+    if action == "exertion" and draft.stage == "exertion":
         option = option_by_display_value(EXERTION_OPTIONS, int(value))
         if option is None:
             return
         draft.exertion = option
+        draft.stage = "preview"
         await query.edit_message_text(
             _feedback_preview(draft),
             parse_mode=ParseMode.HTML,
@@ -276,7 +279,7 @@ async def _show_feedback_options(
     draft.workout = workout
     draft.feeling = None
     draft.exertion = None
-    draft.stage = "rating"
+    draft.stage = "feeling"
     text = _options_text(
         "Самочувствие",
         f"Тренировка {workout.date:%d.%m} «{workout.title}». "
@@ -308,7 +311,7 @@ async def _save_feedback(query, context, draft: FeedbackDraft) -> None:
             exertion_score=draft.exertion.api_value,
         )
     except TrainingEnduranceError:
-        draft.stage = "rating"
+        draft.stage = "preview"
         await query.edit_message_text(
             "Не удалось сохранить оценку. Проверьте сессию и повторите попытку.",
             reply_markup=_draft_keyboard(
@@ -612,6 +615,12 @@ async def _comment_callback(
     if await _handle_selection_action(query, context, draft, action, value):
         return
     if action == "confirm" and draft.stage == "preview":
+        # Подтверждение из прежнего предпросмотра не должно записать другой текст или тренировку.
+        if value != str(draft.preview_version):
+            await query.edit_message_text(
+                "Этот предпросмотр устарел. Подтвердите последний предпросмотр отчёта."
+            )
+            return
         result = await _save_comment(context, draft)
         if draft.stage == "preview":
             settings: Settings = context.application.bot_data["settings"]
@@ -667,6 +676,7 @@ async def _show_comment_preview(
     today = datetime.now(settings.timezone).date()
     workout = draft.workout
     draft.stage = "preview"
+    draft.preview_version += 1
     lines = [f"Отправить отчёт к тренировке {workout.date:%d.%m.%Y} «{workout.title}»?"]
     if draft.source:
         lines.append(f"Источник: {draft.source}.")
@@ -683,7 +693,7 @@ def _comment_preview_keyboard(draft: CommentDraft, *, today: date) -> InlineKeyb
     return _draft_keyboard(
         draft,
         [
-            ("Отправить", "confirm"),
+            ("Отправить", f"confirm:{draft.preview_version}"),
             ("Изменить", "edit"),
             ("Другая тренировка", f"days:{today.isoformat()}"),
         ],

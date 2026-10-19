@@ -105,7 +105,7 @@ class FeedbackFlowTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(12, len(markup.inline_keyboard))
         self.assertIn("Другая тренировка", options)
         self.assertIn("Отмена", options)
-        self.assertEqual("rating", self.context.user_data["feedback_draft"].stage)
+        self.assertEqual("feeling", self.context.user_data["feedback_draft"].stage)
 
     async def test_selects_both_values_and_saves_after_preview(self) -> None:
         await _prepare_feedback(self.update(), self.context)
@@ -268,6 +268,21 @@ class FeedbackFlowTest(unittest.IsolatedAsyncioTestCase):
             query.edit_message_text.assert_not_awaited()
         self.assertEqual(self.workout, self.context.user_data["feedback_draft"].workout)
         self.training.update_feedback.assert_not_awaited()
+
+    async def test_repeated_scale_buttons_are_ignored(self) -> None:
+        await _prepare_feedback(self.update(), self.context)
+        await self.action("feeling:7")
+
+        query = await self.action("feeling:3")
+        query.edit_message_text.assert_not_awaited()
+        await self.action("exertion:5")
+        for data in ("exertion:2", "feeling:3"):
+            query = await self.action(data)
+            query.edit_message_text.assert_not_awaited()
+
+        draft = self.context.user_data["feedback_draft"]
+        self.assertEqual((7, 5), (draft.feeling.display_value, draft.exertion.display_value))
+        self.assertEqual("preview", draft.stage)
 
     async def test_window_uses_user_timezone(self) -> None:
         self.settings.timezone = timezone(timedelta(hours=3))

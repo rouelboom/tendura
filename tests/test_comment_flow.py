@@ -377,17 +377,34 @@ class CommentFlowTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_send_button_error_keeps_preview_buttons(self) -> None:
         await self.command(_prepare_comment, "Текст")
-        await self.press(buttons(self.last_reply()[1])["Сегодня · Утренний кросс"])
+        query = await self.press(buttons(self.last_reply()[1])["Сегодня · Утренний кросс"])
+        send = buttons(query.edit_message_text.await_args.kwargs["reply_markup"])["Отправить"]
         self.training.update_comment.side_effect = [TrainingEnduranceError("boom"), None]
 
-        token = self.context.user_data["comment_draft"].token
-        query = await self.press(f"comment:{token}:confirm")
+        query = await self.press(send)
         self.assertIn("Не удалось сохранить", query.edit_message_text.await_args.args[0])
-        self.assertIn("Отправить", buttons(query.edit_message_text.await_args.kwargs["reply_markup"]))
-        query = await self.press(f"comment:{token}:confirm")
+        retry = buttons(query.edit_message_text.await_args.kwargs["reply_markup"])
+        query = await self.press(retry["Отправить"])
 
         self.assertEqual(2, self.training.update_comment.await_count)
         self.assertEqual("Отчёт спортсмена сохранён.", query.edit_message_text.await_args.args[0])
+
+    async def test_send_from_outdated_preview_is_rejected(self) -> None:
+        await self.command(_prepare_comment, "Первый")
+        query = await self.press(buttons(self.last_reply()[1])["Сегодня · Утренний кросс"])
+        first_send = buttons(query.edit_message_text.await_args.kwargs["reply_markup"])["Отправить"]
+        await self.command(_edit_comment)
+        self.message.text = "Второй"
+        await _receive_comment_text(self.update(), self.context)
+        query = await self.press(buttons(self.last_reply()[1])["Другая тренировка"])
+        options = buttons(query.edit_message_text.await_args.kwargs["reply_markup"])
+        await self.press(options["Сегодня · Вечерняя сила"])
+
+        query = await self.press(first_send)
+
+        self.assertIn("устарел", query.edit_message_text.await_args.args[0])
+        self.training.update_comment.assert_not_awaited()
+        self.assertEqual("preview", self.context.user_data["comment_draft"].stage)
 
 
 if __name__ == "__main__":
