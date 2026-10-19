@@ -153,7 +153,7 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             "Сегодня": "_today",
             "Завтра": "_tomorrow",
             "Неделя": "_week",
-            "Оценить тренировку": "_prepare_feedback",
+            "Самочувствие и нагрузка": "_prepare_feedback",
             "Отчёт из COROS": "_comment_coros",
             "Написать отчёт": "_prepare_comment",
         }

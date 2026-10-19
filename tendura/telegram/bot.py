@@ -62,7 +62,7 @@ WORKOUT_WINDOW_DAYS = 7
 
 MENU_LAYOUT = (
     ("Сегодня", "Завтра", "Неделя"),
-    ("Оценить тренировку",),
+    ("Самочувствие и нагрузка",),
     ("Отчёт из COROS", "Написать отчёт"),
 )
 
@@ -169,7 +169,7 @@ async def _menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "Сегодня": _today,
         "Завтра": _tomorrow,
         "Неделя": _week,
-        "Оценить тренировку": _prepare_feedback,
+        "Самочувствие и нагрузка": _prepare_feedback,
         "Отчёт из COROS": _comment_coros,
         "Написать отчёт": _prepare_comment,
     }
