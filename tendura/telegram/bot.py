@@ -18,7 +18,11 @@ from telegram.ext import (
     filters,
 )
 
-from tendura.application.workouts import GetWorkouts
+from tendura.application.workouts import (
+    GetWorkouts,
+    WorkoutPeriod,
+    dates_for_period,
+)
 from tendura.config import Settings
 from tendura.coros.client import CorosClient, CorosError
 from tendura.core.feedback import (
@@ -139,35 +143,38 @@ async def _prepare_feedback(
     if not await _allowed(update, context):
         return
     context.user_data.pop("pending_feedback", None)
+    context.user_data.pop("feedback_candidates", None)
     message = update.effective_message
     settings: Settings = context.application.bot_data["settings"]
     client: TrainingEnduranceClient = context.application.bot_data["training_client"]
     today = datetime.now(settings.timezone).date()
+    week_dates = dates_for_period(WorkoutPeriod.CALENDAR_WEEK, today=today)
     try:
         workouts = await client.workouts(
-            user_id=settings.training_endurance_user_id or "", dates=[today]
+            user_id=settings.training_endurance_user_id or "", dates=week_dates
         )
     except TrainingEnduranceError:
         await message.reply_text(
-            "Не удалось получить тренировку. Проверьте сессию Training Endurance."
+            "Не удалось получить тренировки. Проверьте сессию Training Endurance."
         )
         return
-    if len(workouts) != 1:
+
+    candidates = _feedback_candidates(workouts, today=today)
+    if not candidates:
         await message.reply_text(
-            "Для оценки нужна ровно одна тренировка на сегодня."
+            "За текущую неделю нет тренировок без полного feedback."
         )
         return
-    pending = PendingFeedback(workouts[0])
-    context.user_data["pending_feedback"] = pending
-    await message.reply_text(
-        _options_text(
-            "Самочувствие",
-            "Как вы чувствовали себя во время тренировки? Выберите один вариант.",
-            FEELING_OPTIONS,
-        ),
-        parse_mode=ParseMode.HTML,
-        reply_markup=_options_keyboard("feeling", FEELING_OPTIONS),
-    )
+    if len(candidates) > 1:
+        context.user_data["feedback_candidates"] = {
+            workout.id: workout for workout in candidates
+        }
+        await message.reply_text(
+            _feedback_selection_text(len(candidates)),
+            reply_markup=_feedback_selection_keyboard(candidates, today=today),
+        )
+        return
+    await _show_feedback_options(message, context, candidates[0])
 
 
 async def _feedback_callback(
@@ -179,16 +186,29 @@ async def _feedback_callback(
     await query.answer()
     if not await _allowed(update, context):
         return
+    data = query.data or ""
+    if data == "feedback:cancel":
+        context.user_data.pop("pending_feedback", None)
+        context.user_data.pop("feedback_candidates", None)
+        await query.edit_message_text("Оценка тренировки отменена.")
+        return
+    if data.startswith("feedback:select:"):
+        candidates = context.user_data.get("feedback_candidates")
+        workout_id = data.split(":", 2)[-1]
+        workout = candidates.get(workout_id) if isinstance(candidates, dict) else None
+        if not isinstance(workout, Workout):
+            await query.edit_message_text(
+                "Этот выбор уже неактуален. Запустите /feedback заново."
+            )
+            return
+        context.user_data.pop("feedback_candidates", None)
+        await _show_feedback_options(query, context, workout)
+        return
     pending = context.user_data.get("pending_feedback")
     if not isinstance(pending, PendingFeedback):
         await query.edit_message_text(
             "Этот выбор уже неактуален. Запустите /feedback заново."
         )
-        return
-    data = query.data or ""
-    if data == "feedback:cancel":
-        context.user_data.pop("pending_feedback", None)
-        await query.edit_message_text("Оценка тренировки отменена.")
         return
     if data == "feedback:restart":
         pending.feeling = None
@@ -238,6 +258,89 @@ async def _feedback_callback(
             parse_mode=ParseMode.HTML,
             reply_markup=_feedback_preview_keyboard(),
         )
+
+
+async def _show_feedback_options(message, context, workout: Workout) -> None:
+    context.user_data["pending_feedback"] = PendingFeedback(workout)
+    text = _options_text(
+        "Самочувствие",
+        f"Тренировка {workout.date:%d.%m} «{workout.title}». "
+        "Как вы чувствовали себя во время тренировки? Выберите один вариант.",
+        FEELING_OPTIONS,
+    )
+    kwargs = {
+        "parse_mode": ParseMode.HTML,
+        "reply_markup": _options_keyboard("feeling", FEELING_OPTIONS),
+    }
+    sender = getattr(message, "reply_text", None)
+    if sender is None:
+        sender = message.edit_message_text
+    await sender(text, **kwargs)
+
+
+def _feedback_candidates(
+    workouts: list[Workout], *, today: date
+) -> list[Workout]:
+    candidates = [
+        workout
+        for workout in workouts
+        if workout.date <= today
+        and (workout.feeling_score is None or workout.exertion_score is None)
+    ]
+    yesterday = today - timedelta(days=1)
+    return sorted(
+        candidates,
+        key=lambda workout: (
+            0
+            if workout.date == today
+            else 1
+            if workout.date == yesterday
+            else 2,
+            -workout.date.toordinal(),
+            workout.sort if workout.sort is not None else 0,
+            workout.id,
+        ),
+    )
+
+
+def _feedback_selection_text(count: int) -> str:
+    if count % 10 == 1 and count % 100 != 11:
+        workout_word = "тренировку"
+    elif count % 10 in (2, 3, 4) and count % 100 not in (12, 13, 14):
+        workout_word = "тренировки"
+    else:
+        workout_word = "тренировок"
+    return (
+        f"Нашёл {count} {workout_word} без полного feedback.\n"
+        "К какой тренировке прикрепить отчёт?"
+    )
+
+
+def _feedback_selection_keyboard(
+    workouts: list[Workout], *, today: date
+) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    _feedback_workout_label(workout, today=today),
+                    callback_data=f"feedback:select:{workout.id}",
+                )
+            ]
+            for workout in workouts
+        ]
+        + [[InlineKeyboardButton("Отмена", callback_data="feedback:cancel")]]
+    )
+
+
+def _feedback_workout_label(workout: Workout, *, today: date) -> str:
+    if workout.date == today:
+        day = "Сегодня"
+    elif workout.date == today - timedelta(days=1):
+        day = "Вчера"
+    else:
+        day = f"{workout.date:%d.%m}"
+    return f"{day} · {workout.title}"
 
 
 async def _save_feedback(query, context, pending: PendingFeedback) -> None:
