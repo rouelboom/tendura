@@ -163,8 +163,9 @@ class CommentFlowTest(unittest.IsolatedAsyncioTestCase):
 
         text, markup = self.last_reply()
         self.assertIn("«Утренний кросс»", text)
-        self.assertIn("/edit", text)
-        self.assertIn("Другая тренировка", buttons(markup))
+        self.assertEqual(
+            ["Отправить", "Изменить", "Другая тренировка", "Отмена"], list(buttons(markup))
+        )
         self.assertEqual("preview", self.context.user_data["comment_draft"].stage)
 
     async def test_coros_without_workouts_on_date_offers_week(self) -> None:
@@ -307,7 +308,7 @@ class CommentFlowTest(unittest.IsolatedAsyncioTestCase):
         self.training.update_comment.side_effect = [TrainingEnduranceError("boom"), None]
 
         await self.command(_confirm_comment)
-        self.assertIn("повторите /confirm", self.last_reply()[0])
+        self.assertIn("повторите отправку", self.last_reply()[0])
         await self.command(_confirm_comment)
 
         self.assertEqual(2, self.training.update_comment.await_count)
@@ -354,6 +355,39 @@ class CommentFlowTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(date(2026, 10, 20), dates[0])
         self.assertEqual(date(2026, 10, 26), dates[-1])
         self.assertIn("20.10–26.10", query.edit_message_text.await_args.args[0])
+
+    async def test_preview_buttons_edit_and_send(self) -> None:
+        await self.command(_prepare_comment, "Старый")
+        query = await self.press(buttons(self.last_reply()[1])["Сегодня · Утренний кросс"])
+        preview_buttons = buttons(query.edit_message_text.await_args.kwargs["reply_markup"])
+
+        query = await self.press(preview_buttons["Изменить"])
+        self.assertIn("Отправьте новый текст", query.edit_message_text.await_args.args[0])
+        self.message.text = "Новый"
+        await _receive_comment_text(self.update(), self.context)
+        query = await self.press(buttons(self.last_reply()[1])["Отправить"])
+
+        self.training.update_comment.assert_awaited_once_with(self.morning, "Новый")
+        self.assertEqual("Отчёт спортсмена сохранён.", query.edit_message_text.await_args.args[0])
+        self.assertNotIn("comment_draft", self.context.user_data)
+
+        query = await self.press(buttons(self.last_reply()[1])["Отправить"])
+        self.assertIn("неактуален", query.edit_message_text.await_args.args[0])
+        self.training.update_comment.assert_awaited_once()
+
+    async def test_send_button_error_keeps_preview_buttons(self) -> None:
+        await self.command(_prepare_comment, "Текст")
+        await self.press(buttons(self.last_reply()[1])["Сегодня · Утренний кросс"])
+        self.training.update_comment.side_effect = [TrainingEnduranceError("boom"), None]
+
+        token = self.context.user_data["comment_draft"].token
+        query = await self.press(f"comment:{token}:confirm")
+        self.assertIn("Не удалось сохранить", query.edit_message_text.await_args.args[0])
+        self.assertIn("Отправить", buttons(query.edit_message_text.await_args.kwargs["reply_markup"]))
+        query = await self.press(f"comment:{token}:confirm")
+
+        self.assertEqual(2, self.training.update_comment.await_count)
+        self.assertEqual("Отчёт спортсмена сохранён.", query.edit_message_text.await_args.args[0])
 
 
 if __name__ == "__main__":

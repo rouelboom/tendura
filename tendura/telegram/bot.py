@@ -9,7 +9,13 @@ from html import escape
 from typing import Literal
 
 from httpx import Limits
-from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import (
+    BotCommand,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    ReplyKeyboardMarkup,
+    Update,
+)
 from telegram.constants import ParseMode
 from telegram.ext import (
     Application,
@@ -53,6 +59,12 @@ BOT_COMMANDS = (
 )
 
 WORKOUT_WINDOW_DAYS = 7
+
+MENU_LAYOUT = (
+    ("Сегодня", "Завтра", "Неделя"),
+    ("Оценить тренировку",),
+    ("Отчёт из COROS", "Написать отчёт"),
+)
 
 
 @dataclass
@@ -105,6 +117,12 @@ def build_application(settings: Settings) -> Application:
         client, user_id=settings.training_endurance_user_id or ""
     )
     application.bot_data["coros_client"] = CorosClient(settings.coros_oauth_file)
+    application.add_handler(CommandHandler(("start", "menu"), _show_menu))
+    application.add_handler(
+        MessageHandler(
+            filters.Text([label for row in MENU_LAYOUT for label in row]), _menu_button
+        )
+    )
     application.add_handler(CommandHandler(("today", "t"), _today))
     application.add_handler(CommandHandler(("tomorrow", "tm"), _tomorrow))
     application.add_handler(CommandHandler(("week", "w"), _week))
@@ -132,6 +150,31 @@ def build_application(settings: Settings) -> Application:
 
 async def _set_commands(application: Application) -> None:
     await application.bot.set_my_commands(BOT_COMMANDS)
+
+
+async def _show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await _allowed(update, context):
+        return
+    await update.effective_message.reply_text(
+        "Выберите действие кнопкой ниже.",
+        reply_markup=ReplyKeyboardMarkup(
+            [list(row) for row in MENU_LAYOUT], resize_keyboard=True, is_persistent=True
+        ),
+    )
+
+
+async def _menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    handlers = {
+        "Сегодня": _today,
+        "Завтра": _tomorrow,
+        "Неделя": _week,
+        "Оценить тренировку": _prepare_feedback,
+        "Отчёт из COROS": _comment_coros,
+        "Написать отчёт": _prepare_comment,
+    }
+    handler = handlers.get(update.effective_message.text or "")
+    if handler is not None:
+        await handler(update, context)
 
 
 async def _today(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -566,7 +609,22 @@ async def _comment_callback(
         context.user_data.pop("comment_draft", None)
         await query.edit_message_text("Подготовка отчёта отменена.")
         return
-    await _handle_selection_action(query, context, draft, action, value)
+    if await _handle_selection_action(query, context, draft, action, value):
+        return
+    if action == "confirm" and draft.stage == "preview":
+        result = await _save_comment(context, draft)
+        if draft.stage == "preview":
+            settings: Settings = context.application.bot_data["settings"]
+            today = datetime.now(settings.timezone).date()
+            await query.edit_message_text(
+                result, reply_markup=_comment_preview_keyboard(draft, today=today)
+            )
+        else:
+            await query.edit_message_text(result)
+        return
+    if action == "edit" and draft.stage in ("preview", "text") and draft.workout:
+        draft.stage = "text"
+        await query.edit_message_text("Отправьте новый текст отчёта обычным сообщением.")
 
 
 def _draft_keyboard(
@@ -616,8 +674,19 @@ async def _show_comment_preview(
         lines.append("Существующий отчёт будет перезаписан.")
     await _send(
         target,
-        "\n".join(lines) + f"\n\n{draft.text}\n\n/confirm, /cancel или /edit",
-        _draft_keyboard(draft, [("Другая тренировка", f"days:{today.isoformat()}")]),
+        "\n".join(lines) + f"\n\n{draft.text}",
+        _comment_preview_keyboard(draft, today=today),
+    )
+
+
+def _comment_preview_keyboard(draft: CommentDraft, *, today: date) -> InlineKeyboardMarkup:
+    return _draft_keyboard(
+        draft,
+        [
+            ("Отправить", "confirm"),
+            ("Изменить", "edit"),
+            ("Другая тренировка", f"days:{today.isoformat()}"),
+        ],
     )
 
 
@@ -629,23 +698,23 @@ async def _confirm_comment(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if not isinstance(draft, CommentDraft) or draft.stage != "preview":
         await message.reply_text("Нет подготовленного отчёта.")
         return
+    await message.reply_text(await _save_comment(context, draft))
+
+
+async def _save_comment(context: ContextTypes.DEFAULT_TYPE, draft: CommentDraft) -> str:
     workout = draft.workout
     if workout is None or draft.candidates.get(workout.id) != workout or not draft.text:
-        await message.reply_text("Выбранная тренировка неактуальна. Подготовьте отчёт заново.")
-        return
+        return "Выбранная тренировка неактуальна. Подготовьте отчёт заново."
     draft.stage = "saving"
     client: TrainingEnduranceClient = context.application.bot_data["training_client"]
     try:
         await client.update_comment(workout, draft.text)
     except TrainingEnduranceError:
         draft.stage = "preview"
-        await message.reply_text(
-            "Не удалось сохранить отчёт. Проверьте сессию и повторите /confirm или /cancel."
-        )
-        return
+        return "Не удалось сохранить отчёт. Проверьте сессию и повторите отправку или отмените."
     if context.user_data.get("comment_draft") is draft:
         context.user_data.pop("comment_draft")
-    await message.reply_text("Отчёт спортсмена сохранён.")
+    return "Отчёт спортсмена сохранён."
 
 
 async def _cancel_comment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
