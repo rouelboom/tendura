@@ -470,6 +470,7 @@ async def _send_period(
 async def _comment_coros(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await _allowed(update, context):
         return
+    context.user_data.pop("comment_draft", None)
     message = update.effective_message
     settings: Settings = context.application.bot_data["settings"]
     client: CorosClient = context.application.bot_data["coros_client"]
@@ -493,7 +494,7 @@ async def _comment_coros(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         source=f"отчёт COROS «{activity.title}» от {activity.date:%d.%m.%Y}",
     )
     await _offer_comment_workouts(
-        message, context, draft, [activity.date], other_days=True
+        message, context, draft, [activity.date], other_days=True, auto_select=True
     )
 
 
@@ -504,7 +505,9 @@ async def _prepare_comment(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     settings: Settings = context.application.bot_data["settings"]
     draft = _start_comment_draft(context, " ".join(context.args or ()) or None)
     end = datetime.now(settings.timezone).date()
-    await _offer_comment_workouts(message, context, draft, _comment_window(end))
+    await _offer_comment_workouts(
+        message, context, draft, _comment_window(end), auto_select=True
+    )
 
 
 def _start_comment_draft(
@@ -526,6 +529,7 @@ async def _offer_comment_workouts(
     dates: list[date],
     *,
     other_days: bool = False,
+    auto_select: bool = False,
 ) -> None:
     settings: Settings = context.application.bot_data["settings"]
     client: TrainingEnduranceClient = context.application.bot_data["training_client"]
@@ -541,7 +545,17 @@ async def _offer_comment_workouts(
             target,
             "Не удалось получить тренировки Training Endurance. "
             "Текст отчёта сохранён, повторите выбор.",
-            _comment_keyboard(draft, [("Повторить", f"days:{dates[-1].isoformat()}")]),
+            _comment_keyboard(
+                draft,
+                [
+                    (
+                        "Повторить",
+                        f"date:{dates[0].isoformat()}"
+                        if other_days
+                        else f"days:{dates[-1].isoformat()}",
+                    )
+                ],
+            ),
         )
         return
     candidates = sorted(
@@ -553,11 +567,13 @@ async def _offer_comment_workouts(
         ),
     )
     draft.candidates = {workout.id: workout for workout in candidates}
-    if len(candidates) == 1:
+    if auto_select and len(candidates) == 1:
         await _select_comment_workout(target, context, draft, candidates[0])
         return
     if other_days and not candidates:
-        await _offer_comment_workouts(target, context, draft, _comment_window(today))
+        await _offer_comment_workouts(
+            target, context, draft, _comment_window(today), auto_select=auto_select
+        )
         return
     period = (
         f"{dates[0]:%d.%m}"
@@ -607,36 +623,36 @@ async def _comment_callback(
         return
     _, token, action, value = ((query.data or "").split(":", 3) + ["", "", ""])[:4]
     draft = context.user_data.get("comment_draft")
-    if (
-        not isinstance(draft, CommentDraft)
-        or draft.token != token
-        or draft.stage == "saving"
-    ):
+    if not isinstance(draft, CommentDraft) or draft.token != token:
         await query.edit_message_text(
             "Этот выбор уже неактуален. Запустите /comment или /comment_coros заново."
         )
+        return
+    # Повторное нажатие в текущем диалоге не должно затирать уже показанный экран.
+    if draft.stage == "saving":
         return
     if action == "cancel":
         context.user_data.pop("comment_draft", None)
         await query.edit_message_text("Подготовка отчёта отменена.")
         return
-    if action == "pick" and draft.stage == "select" and value in draft.candidates:
-        await _select_comment_workout(query, context, draft, draft.candidates[value])
+    if action == "pick":
+        if draft.stage == "select" and value in draft.candidates:
+            await _select_comment_workout(query, context, draft, draft.candidates[value])
         return
+    if action not in ("days", "date"):
+        return
+    settings: Settings = context.application.bot_data["settings"]
+    try:
+        day = date.fromisoformat(value)
+    except ValueError:
+        return
+    if day > datetime.now(settings.timezone).date():
+        return
+    draft.workout = None
     if action == "days":
-        settings: Settings = context.application.bot_data["settings"]
-        today = datetime.now(settings.timezone).date()
-        try:
-            end = date.fromisoformat(value)
-        except ValueError:
-            end = None
-        if end is not None and end <= today:
-            draft.workout = None
-            await _offer_comment_workouts(query, context, draft, _comment_window(end))
-            return
-    await query.edit_message_text(
-        "Этот выбор уже неактуален. Запустите /comment или /comment_coros заново."
-    )
+        await _offer_comment_workouts(query, context, draft, _comment_window(day))
+    else:
+        await _offer_comment_workouts(query, context, draft, [day], other_days=True)
 
 
 def _comment_keyboard(

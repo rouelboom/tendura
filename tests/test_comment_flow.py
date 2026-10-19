@@ -231,15 +231,65 @@ class CommentFlowTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Нет подготовленного", self.last_reply()[0])
         self.training.update_comment.assert_not_awaited()
 
-    async def test_unknown_workout_and_future_days_are_rejected(self) -> None:
+    async def test_unknown_workout_and_future_days_are_ignored(self) -> None:
         await self.command(_prepare_comment, "Текст")
         token = self.context.user_data["comment_draft"].token
 
-        query = await self.press(f"comment:{token}:pick:foreign")
-        self.assertIn("неактуален", query.edit_message_text.await_args.args[0])
-        query = await self.press(f"comment:{token}:days:2026-07-22")
-        self.assertIn("неактуален", query.edit_message_text.await_args.args[0])
+        for data in (f"comment:{token}:pick:foreign", f"comment:{token}:days:2026-07-22"):
+            query = await self.press(data)
+            query.edit_message_text.assert_not_awaited()
         self.assertIsNone(self.context.user_data["comment_draft"].workout)
+        self.assertEqual(1, self.training.workouts.await_count)
+
+    async def test_repeated_pick_keeps_current_preview(self) -> None:
+        await self.command(_prepare_comment, "Текст")
+        pick = buttons(self.last_reply()[1])["Сегодня · Утренний кросс"]
+        await self.press(pick)
+
+        query = await self.press(pick)
+
+        query.edit_message_text.assert_not_awaited()
+        self.assertEqual("preview", self.context.user_data["comment_draft"].stage)
+
+    async def test_single_workout_preview_allows_earlier_weeks(self) -> None:
+        old = make_workout("workout-6", date(2026, 7, 10), "Длительная")
+        self.training.workouts.side_effect = [[self.morning], [self.morning], [old]]
+
+        await self.command(_prepare_comment, "Текст")
+        self.assertIn("«Утренний кросс»", self.last_reply()[0])
+        query = await self.press(buttons(self.last_reply()[1])["Другая тренировка"])
+        options = buttons(query.edit_message_text.await_args.kwargs["reply_markup"])
+        self.assertIn("Сегодня · Утренний кросс", options)
+        query = await self.press(options["← Ранее"])
+        options = buttons(query.edit_message_text.await_args.kwargs["reply_markup"])
+        query = await self.press(options["10.07 · Длительная"])
+
+        self.assertIn("10.07.2026 «Длительная»", query.edit_message_text.await_args.args[0])
+
+    async def test_failed_coros_start_invalidates_previous_draft(self) -> None:
+        await self.command(_prepare_comment, "Ручной")
+        await self.press(buttons(self.last_reply()[1])["Сегодня · Утренний кросс"])
+        self.coros.latest_activity.return_value = None
+
+        await self.command(_comment_coros)
+        await self.command(_confirm_comment)
+
+        self.assertNotIn("comment_draft", self.context.user_data)
+        self.training.update_comment.assert_not_awaited()
+
+    async def test_coros_retry_keeps_activity_date(self) -> None:
+        self.coros.latest_activity.return_value = CorosActivity(
+            "activity-1", 100, date(2026, 7, 20), "Outdoor Run", report="Отчёт"
+        )
+        self.training.workouts.side_effect = [TrainingEnduranceError("boom")]
+
+        await self.command(_comment_coros)
+        self.training.workouts.side_effect = [[], [self.morning, self.evening]]
+        await self.press(buttons(self.last_reply()[1])["Повторить"])
+
+        calls = self.training.workouts.await_args_list
+        self.assertEqual([date(2026, 7, 20)], calls[-2].kwargs["dates"])
+        self.assertEqual(7, len(calls[-1].kwargs["dates"]))
 
     async def test_repeated_confirm_does_not_write_again(self) -> None:
         await self.command(_prepare_comment, "Текст")
@@ -270,6 +320,8 @@ class CommentFlowTest(unittest.IsolatedAsyncioTestCase):
         text, markup = self.last_reply()
         self.assertIn("Текст отчёта сохранён", text)
         query = await self.press(buttons(markup)["Повторить"])
+        options = buttons(query.edit_message_text.await_args.kwargs["reply_markup"])
+        query = await self.press(options["Сегодня · Утренний кросс"])
 
         self.assertIn("Сохранённый", query.edit_message_text.await_args.args[0])
 
